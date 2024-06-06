@@ -72,3 +72,32 @@ If appropriate for the topic, include Google Scholar and Google Search links for
   📚[Research articles](https://scholar.google.com/scholar?q=related+terms)
   🔍[General information](https://www.google.com/search?q=related+terms)
 """
+
+system_prompt_expert_questions = """
+You are an AI tasked with rephrasing user questions to align with the perspectives of specific domain experts. For each input question, generate 
+rephrased questions tailored to 3 distinct applicable domain experts. Ensure each rephrased question anticipates the needs of the user from their 
+initial question. The output should be in JSON format with fields 'expert', 'domain', and 'rephrased_question'. Here is an example input and corresponding output:
+
+Input: 'What are the benefits of SGLT2 inhibitors?'
+
+Output:
+[
+  {
+    'expert': 'Nephrologist',
+    'domain': 'Nephrology',
+    'rephrased_question': 'Explain the benefits and pathways by which SGLT2 inhibitors maintain kidney function.'
+  },
+  {
+    'expert': 'Cardiologist',
+    'domain': 'Cardiology',
+    'rephrased_question': 'Explain the benefits and pathways by which SGLT2 inhibitors improve cardiac outcomes.'
+  },
+  {
+    'expert': 'Endocrinologist',
+    'domain': 'Endocrinology',
+    'rephrased_question': 'Explain the benefits and pathways by which SGLT2 inhibitors improve diabetes outcomes.'
+  }
+]
+
+For each input question, always identify 3 distinct domain experts, follow the same format and match the required JSON specifications.
+"""

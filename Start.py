@@ -7,9 +7,10 @@ import markdown2
 import requests
 import datetime
 import pytz
-from prompts import system_prompt_regular, system_prompt_essayist, system_prompt_expert
+from prompts import system_prompt_regular, system_prompt_essayist, system_prompt_expert, system_prompt_expert_questions
 from embedchain import App
 from groq import Groq
+import asyncio
 
 
 # Streamlit page configuration
@@ -110,7 +111,7 @@ def set_client(model):
 
 from typing import List, Dict, Any
 
-def llm_call(model: str, messages: List[Dict[str, Any]], stream: bool = True) -> str:
+def llm_call(model: str, messages: List[Dict[str, Any]], stream: bool = True, response_format: Dict[str, str] = {"type": "text"} ) -> str:
     try:
         # Set the appropriate client based on the model
         client = set_client(model)
@@ -120,7 +121,8 @@ def llm_call(model: str, messages: List[Dict[str, Any]], stream: bool = True) ->
             messages=messages, 
             temperature=0.5, 
             max_tokens=1000, 
-            stream=stream
+            stream=stream,
+            response_format=response_format
         )
         if stream:
             # Initialize an empty response string and a Streamlit placeholder for streaming output
@@ -213,6 +215,11 @@ if check_password():
         avatar = "👩‍⚕️" if message["role"] == "user" else "🤓"
         with st.chat_message(message["role"], avatar=avatar):
             st.markdown(message["content"])
+    response_format = {"type": "text"}
+    if st.checkbox("Use 3 Experts"):
+        st.session_state.messages = []
+        response_format = {"type": "json_object"}
+        st.session_state.messages.append({"role": "system", "content": system_prompt_expert_questions})
 
     # Accept user input and process it
     if prompt := st.chat_input("What's up?"):
@@ -223,12 +230,30 @@ if check_password():
         with st.chat_message("assistant", avatar="🤓"):
             try:
                 st.session_state.messages = enforce_length_constraint_with_summarization(st.session_state.model, st.session_state.messages)
-                response = llm_call(st.session_state.model, st.session_state.messages)
+                response = llm_call(st.session_state.model, st.session_state.messages, response_format=response_format)
                 st.session_state.messages.append({"role": "assistant", "content": response})
                 st.session_state.full_conversation.append({"role": "assistant", "content": response})
                 st.session_state.response = response
             except Exception as e:
                 st.error(f"Error: {e}")
+                
+    # Parse JSON data
+        data = json.loads(response)
+
+        async def LLM_call(entry):
+            # Simulate a call to an external service with an awaitable function
+            await asyncio.sleep(1)  # Simulating I/O operation with sleep
+            print(f"Processed question for {entry['expert']} in domain {entry['domain']}")
+
+        async def main():
+            tasks = []
+            for entry in data['rephrased_questions']:
+                tasks.append(LLM_call(entry))
+            
+            await asyncio.gather(*tasks)
+
+        # Run the main function
+        asyncio.run(main())
 
     # Offer download option for the conversation
     if st.session_state.full_conversation:
