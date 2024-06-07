@@ -239,21 +239,23 @@ if check_password():
                 
     # Parse JSON data
         data = json.loads(response)
+        st.write(data)
+        st.write(data["rephrased_questions"][0])
 
-        async def LLM_call(entry):
-            # Simulate a call to an external service with an awaitable function
-            await asyncio.sleep(1)  # Simulating I/O operation with sleep
-            print(f"Processed question for {entry['expert']} in domain {entry['domain']}")
+        # async def LLM_call(entry):
+        #     # Simulate a call to an external service with an awaitable function
+        #     await asyncio.sleep(1)  # Simulating I/O operation with sleep
+        #     print(f"Processed question for {entry['expert']} in domain {entry['domain']}")
 
-        async def main():
-            tasks = []
-            for entry in data['rephrased_questions']:
-                tasks.append(LLM_call(entry))
+        # async def main():
+        #     tasks = []
+        #     for entry in data['rephrased_questions']:
+        #         tasks.append(LLM_call(entry))
             
-            await asyncio.gather(*tasks)
+        #     await asyncio.gather(*tasks)
 
-        # Run the main function
-        asyncio.run(main())
+        # # Run the main function
+        # asyncio.run(main())
 
     # Offer download option for the conversation
     if st.session_state.full_conversation:
