@@ -193,7 +193,7 @@ def main():
             with st.spinner('Waiting for experts to respond...'):
                 expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
             for i, response in enumerate(expert_answers):
-                with st.expander(f"{experts[i]} Perspective"):
+                with st.expander(f"AI {experts[i]} Perspective"):
                     st.write(response['choices'][0]['message']['content'])
                 # st.write(f"**Expert {i+1} Response:**")
                 # st.write(response['choices'][0]['message']['content'])
