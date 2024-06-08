@@ -346,7 +346,9 @@ def main():
             st.write("After starting thread")
 
             st.write("Before generating answer chunks")
+            st.write("Before generating answer chunks")
             for answer_chunk in generate(q):
+                st.write(f"Generated chunk: {answer_chunk}")
                 st.write(f"Generated chunk: {answer_chunk}")
                 full_response += answer_chunk
                 msg_placeholder.markdown(full_response)
