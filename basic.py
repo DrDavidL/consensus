@@ -1,30 +1,25 @@
 import asyncio
 import json
-import queue
 import re
 import tempfile
-import threading
+from datetime import datetime
 
 import aiohttp
 import requests
 import streamlit as st
 from openai import OpenAI
 
-from aiocache import Cache
-from aiocache import cached
 
 from embedchain import App
 from embedchain.config import BaseLlmConfig
-from embedchain.helpers.callbacks import (
-    StreamingStdOutCallbackHandlerYield,
-    generate,
-)
+
 
 from prompts import (
     system_prompt_expert_questions,
     expert1_system_prompt,
     expert2_system_prompt,
     expert3_system_prompt,
+    optimize_search_terms_system_prompt,
 )
 
 # Set your OpenAI API key
@@ -32,11 +27,22 @@ api_key = st.secrets["OPENAI_API_KEY"]
 
 
 
-@st.cache_data
-def realtime_search(query, domains, max):
+def realtime_search(query, domains, max, start_year=2020):
     url = "https://real-time-web-search.p.rapidapi.com/search"
     full_query = f"{domains} {query}"
-    querystring = {"q": full_query, "limit": max}
+    
+    # Define the start date and the current date
+    start_date = f"{start_year}-01-01"
+    end_date = datetime.now().strftime('%Y-%m-%d')
+    
+    # Include the date range in the query string
+    querystring = {
+        "q": full_query,
+        "limit": max,
+        "from": start_date,
+        "to": end_date
+    }
+    
     headers = {
         "X-RapidAPI-Key": st.secrets["X-RapidAPI-Key"],
         "X-RapidAPI-Host": "real-time-web-search.p.rapidapi.com",
@@ -56,6 +62,7 @@ def realtime_search(query, domains, max):
         return [], []
 
     return snippets, urls
+
 
 # @cached(ttl=None, cache=Cache.MEMORY)
 async def get_response(messages):
@@ -88,16 +95,18 @@ def clean_text(text):
 
 def refine_output(data):
     with st.expander("Source Excerpts:"):
+        all_sources = ""
         for text, info in sorted(data, key=lambda x: x[1]['score'], reverse=True)[:3]:
             st.write(f"Score: {info['score']}\n")
             cleaned_text = clean_text(text)
-            
+            all_sources += cleaned_text
             # if "Table" in cleaned_text:
             #     st.write("Extracted Table:")
             #     st.write(create_table_from_text(cleaned_text))  # Example of integrating table extraction
             # else:
             st.write("Text:\n", cleaned_text)
             st.write("\n")
+    return all_sources
 
 
 
@@ -239,6 +248,8 @@ def create_chat_completion(
     return completion
 
 def check_password() -> bool:
+    if "password" not in st.session_state:
+        st.session_state.password = ""
     def password_entered() -> None:
         if st.session_state["password"] == st.secrets["password"]:
             st.session_state["password_correct"] = True
@@ -278,6 +289,12 @@ def main():
         st.session_state["sources"] = []
     if "rag_response" not in st.session_state:
         st.session_state["rag_response"] = ""
+    
+    if "citation_data" not in st.session_state:
+        st.session_state["citation_data"] = []
+        
+    if "source_chunks" not in st.session_state:
+        st.session_state.source_chunks = ''
         
     
     if check_password():
@@ -295,7 +312,7 @@ def main():
     site:www.cell.com OR site:www.nature.com OR site:www.springer.com OR site:www.wiley.com OR site:www.ahrq.gov OR site:www.edu"""
         if st.button('Begin Research'):
             
-            # all_site_text = []
+
  
 
             
@@ -304,99 +321,55 @@ def main():
                 domains = medical_domains
             else:
                 domains = ""
-                
-
-            st.session_state.snippets, st.session_state.urls = realtime_search(original_query, domains, site_number)
+            
+            search_messages = [{'role': 'system', 'content': optimize_search_terms_system_prompt},
+                                {'role': 'user', 'content': original_query}]    
+            response_google_search_terms = create_chat_completion(search_messages, temperature=0.3, )
+            google_search_terms = response_google_search_terms.choices[0].message.content
+            with st.spinner(f'Searching for "{google_search_terms}"...'):
+                st.session_state.snippets, st.session_state.urls = realtime_search(google_search_terms, domains, site_number)
             for site in st.session_state.urls:
                 try:
                     app.add(site, data_type='web_page')
-                    # st.session_state.search_results += f"{site}\n"
                     
                 except Exception as e:
-                    # st.error(f"Error adding {site}: {e}, skipping that one!")
-                    st.sidebar.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
+                    with st.sidebar:
+                        with st.expander("Sites Blocked"):
+                            st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
 
-            # web_results = app.query(original_query)
-            # st.write(web_results)
-            
-            msg_placeholder = st.empty()
-            msg_placeholder.markdown("Thinking...")
-            full_response = ""
 
-            # Create a queue to handle streaming responses                                                  
-            q = queue.Queue()                                                                               
-                                                                                                            
-            # Define a function to handle the app's response                                                
-            def app_response(result):                                                                       
-                st.write("Starting app_response function")                                                  
-                # Get the LLM configuration and set up callbacks for streaming                              
-                llm_config = app.llm.config.as_dict()                                                       
-                llm_config["callbacks"] = [StreamingStdOutCallbackHandlerYield(q=q)]                        
-                config = BaseLlmConfig(**llm_config)                                                       
-                st.write("Before querying the app")                                                         
-                st.write(f"App config: {app.llm.config.as_dict()}")                                         
+            llm_config = app.llm.config.as_dict()  
+            config = BaseLlmConfig(**llm_config) 
+            with st.spinner('Analyzing retrieved content...'):
                 try:                                                                                        
-                    # Query the app with the tweaked prompt and get the answer and citations                
-                    answer, citations = app.query(f"Using only context, generate the best possible answer {original_query}", config=config, citations=True)                                               
-                    st.write("After querying the app")                                                      
-                    st.write(f"Answer: {answer}")                                                           
-                    st.write(f"Citations: {citations}")                                                     
-                except Exception as e:                                                                      
-                    st.error(f"Error during app query: {e}")                                                
-                st.write("Completed app_response function")                                                 
-                # Store the answer and citations in the result dictionary                                   
-                result["answer"] = answer                                                                  
-                result["citations"] = citations                                                            
-                                                                                                            
-            # Initialize an empty dictionary to store the results                                           
-            results = {}                                                                                   
-            # Create a new thread to run the app_response function                                          
-            thread = threading.Thread(target=app_response, args=(results,))                                
-            # Start the thread                                                                              
-            thread.start()                                                                                  
-                                                                                                            
-            st.write("Before generating answer chunks")                                                     
-            st.write(f"Queue size: {q.qsize()}")                                                            
-            try:                                                                                            
-                # Generate answer chunks from the queue                                                     
-                for answer_chunk in generate(q):                                                            
-                    st.write("Inside generate loop")                                                        
-                    st.write(f"Generated chunk: {answer_chunk}")                                            
-                    st.write(f"Queue size after chunk: {q.qsize()}")                                        
-                    # Append each chunk to the full response                                                
-                    full_response += answer_chunk                                                           
-                    # Update the placeholder with the full response so far                                  
-                    msg_placeholder.markdown(full_response)                                                 
-                    st.write(f"Full response so far: {full_response}")                                      
-            except Exception as e:                                                                          
-                st.error(f"Error during answer generation: {e}")                                            
-            st.write("Completed generating answer chunks")                                                  
-                                                                                                            
-            # Wait for the thread to finish                                                                 
-            thread.join()                                                                                   
-            # Get the final answer and citations from the results dictionary                                
-            answer, citations = results["answer"], results["citations"]                                   
-            if citations:                                                                                   
-                # Append the sources to the full response                                                   
-                full_response += "\n\n**Sources**:\n"                                                       
-                sources = []                                                                               
-                for i, citation in enumerate(citations):                                                    
-                    source = citation[1]["url"]                                                            
-                    # Extract the filename from the URL if it's a PDF                                       
-                    pattern = re.compile(r"([^/]+)\.[^\.]+\.pdf$")                                         
-                    match = pattern.search(source)                                                         
-                    if match:                                                                               
-                        source = match.group(1) + ".pdf"                                                   
-                    sources.append(source)                                                                  
-                # Remove duplicate sources                                                                  
-                sources = list(set(sources))                                                              
-                for source in sources:                                                                      
-                    full_response += f"- {source}\n" 
+                    answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {google_search_terms}", config=config, citations=True)                                               
+                except Exception as e:   
+                    st.error(f"Error during app query: {e}")                                                                   
+  
+            full_response = ""
+            if answer:                  
+                full_response = f"**Answer from web resources:** {answer} \n\n Search terms: {google_search_terms} \n\n"
+                                  
+            if citations:                                                                                           
+                full_response += "\n\n**Sources**:\n"                                                   
+                sources = []                                                                            
+                for i, citation in enumerate(citations):                                                
+                    source = citation[1]["url"]                                                         
+                    pattern = re.compile(r"([^/]+)\.[^\.]+\.pdf$")                                      
+                    match = pattern.search(source)                                                      
+                    if match:                                                                           
+                        source = match.group(1) + ".pdf"                                                
+                    sources.append(source)                                                              
+                sources = list(set(sources))                                                            
+                for source in sources:                                                                  
+                    full_response += f"- {source}\n"      
+            st.markdown(full_response)
+            
+            st.session_state.rag_response = full_response
+            st.session_state.source_chunks = refine_output(citations)
 
-            st.write(full_response)
-            
-            
-            # *************************************************
+
+
             
             
             completion = create_chat_completion(messages=find_experts_messages, temperature=0.3, response_format="json_object")
@@ -429,29 +402,21 @@ def main():
             for i, response in enumerate(expert_answers):
                 with st.expander(f"AI {experts[i]} Perspective"):
                     st.write(response['choices'][0]['message']['content'])
-                # st.write(f"**Expert {i+1} Response:**")
-                # st.write(response['choices'][0]['message']['content'])
 
-        # query1 = st.text_input('Query 1', 'What is the capital of France?')
-        # query2 = st.text_input('Query 2', 'Explain the theory of relativity.')
-        # query3 = st.text_input('Query 3', 'What are the benefits of a ketogenic diet?')
-
-        # if st.button('Send Queries'):
-        #     queries = [query1, query2, query3]
-        #     responses = asyncio.run(get_responses(queries))
-
-        #     for i, response in enumerate(responses):
-        #         st.write(f"**Response {i+1}:**")
-        #         st.write(response['choices'][0]['message']['content'])
 
         with st.sidebar:
-            with st.expander("View Search Result Snippets"):
+            with st.expander("View Search Result Snippets", expanded=True):
                 if st.session_state.snippets:
                     for snippet in st.session_state.snippets:
                         snippet = snippet.replace('<END OF SITE>', '')
                         st.markdown(snippet)
                 else:
                     st.markdown("No search results found!")
+                    
+        with st.sidebar:
+            with st.expander("Web Response and Sources"):
+                st.write(st.session_state.rag_response)
+                st.write(st.session_state.source_chunks)
 
 if __name__ == '__main__':
     main()

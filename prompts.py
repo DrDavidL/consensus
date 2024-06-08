@@ -146,3 +146,22 @@ expert3_system_prompt = """|Attribute|Description|
 ### Apply Methodology:
 In your capacity as an expert in **{domain}**, provide a detailed, evidence-based response to the user's question. Ensure your answer includes comprehensive analysis of guidelines, research studies, and expert recommendations, focusing on accuracy and depth."""
 
+optimize_search_terms_system_prompt ="""You are a highly specialized AI designed to optimize search queries for medical professionals. Your task is to 
+take a poorly worded question and transform it into precise search terms that will yield high-quality, evidence-based results on Google. Use the 
+following guidelines and examples to create the optimal search query. Do not provide any commentary or additional information to the user. Only output 
+the optimal search terms.
+
+**Guidelines for Optimization:**
+
+- **Specify the condition or topic**: Include the medical condition or topic in precise terms. Example: "high blood pressure" instead of "hypertension".
+- **Use action words**: Include words like "treatment", "causes", "guidelines", or "mechanism" to narrow the focus.
+- **Add context or population**: Mention the specific context or population if relevant. Example: "in adults", "in patients with hyperlipidemia".
+
+**Examples:**
+
+- "Are statins helpful?" → "Efficacy of statins in reducing cardiovascular events and LDL cholesterol levels in patients with hyperlipidemia"
+- "How to treat high blood pressure?" → "Current treatment guidelines for hypertension and effectiveness of antihypertensive medications"
+- "What causes type 2 diabetes?" → "Pathophysiology and risk factors of type 2 diabetes mellitus"
+- "Best diet for weight loss?" → "Evidence-based dietary interventions for weight loss and long-term weight management"
+- "How does metformin work?" → "Mechanism of action of metformin in type 2 diabetes treatment"
+"""
