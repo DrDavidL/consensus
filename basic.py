@@ -32,34 +32,22 @@ app = App()
 @st.cache_data
 def realtime_search(query, domains, max):
     url = "https://real-time-web-search.p.rapidapi.com/search"
-    
-    # Combine domains and query
     full_query = f"{domains} {query}"
     querystring = {"q": full_query, "limit": max}
-
     headers = {
         "X-RapidAPI-Key": st.secrets["X-RapidAPI-Key"],
         "X-RapidAPI-Host": "real-time-web-search.p.rapidapi.com",
     }
 
-    urls = []
-    snippets = []
-
     try:
         response = requests.get(url, headers=headers, params=querystring)
-        
-        # Check if the request was successful
-        if response.status_code == 200:
-            response_data = response.json()
-            # st.write(response_data.get('data', []))
-            for item in response_data.get('data', []):
-                urls.append(item.get('url'))   
-                snippets.append(f"**{item.get('title')}**  \n*{item.get('snippet')}*  \n{item.get('url')} <END OF SITE>")
-
-        else:
-            st.error(f"Search failed with status code: {response.status_code}")
-            return [], []
-
+        response.raise_for_status()
+        response_data = response.json().get('data', [])
+        urls = [item.get('url') for item in response_data]
+        snippets = [
+            f"**{item.get('title')}**  \n*{item.get('snippet')}*  \n{item.get('url')} <END OF SITE>"
+            for item in response_data
+        ]
     except requests.exceptions.RequestException as e:
         st.error(f"RapidAPI real-time search failed to respond: {e}")
         return [], []
