@@ -394,9 +394,9 @@ def main():
             expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
                                 {'role': 'user', 'content': updated_question1 + "Here's what I already found to help: " + full_response}]
             expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
-                                {'role': 'user', 'content': updated_question2 + "Here's what I already found to help: " + full_response}}]
+                                {'role': 'user', 'content': updated_question2 + "Here's what I already found to help: " + full_response}]
             expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
-                                {'role': 'user', 'content': updated_question3 + "Here's what I already found to help: " + full_response}}]
+                                {'role': 'user', 'content': updated_question3 + "Here's what I already found to help: " + full_response}]
             
             with st.spinner('Waiting for experts to respond...'):
                 expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
