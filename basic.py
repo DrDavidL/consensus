@@ -1,22 +1,28 @@
-import streamlit as st
-from openai import OpenAI
 import asyncio
-import aiohttp
 import json
-from embedchain import App
-import requests
-import tempfile
 import queue
 import re
 import tempfile
 import threading
 
+import aiohttp
+import requests
+import streamlit as st
+from openai import OpenAI
+
 from embedchain import App
 from embedchain.config import BaseLlmConfig
-from embedchain.helpers.callbacks import (StreamingStdOutCallbackHandlerYield,
-                                          generate)
+from embedchain.helpers.callbacks import (
+    StreamingStdOutCallbackHandlerYield,
+    generate,
+)
 
-from prompts import system_prompt_expert_questions, expert1_system_prompt, expert2_system_prompt, expert3_system_prompt
+from prompts import (
+    system_prompt_expert_questions,
+    expert1_system_prompt,
+    expert2_system_prompt,
+    expert3_system_prompt,
+)
 
 # Set your OpenAI API key
 api_key = st.secrets["OPENAI_API_KEY"]
