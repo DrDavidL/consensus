@@ -261,10 +261,20 @@ site:www.cell.com OR site:www.nature.com OR site:www.springer.com OR site:www.wi
             q = queue.Queue()
 
             def app_response(result):
+                st.write("Starting app_response function")
                 llm_config = app.llm.config.as_dict()
                 llm_config["callbacks"] = [StreamingStdOutCallbackHandlerYield(q=q)]
                 config = BaseLlmConfig(**llm_config)
-                answer, citations = app.query(tweaked_prompt, config=config, citations=True)
+                st.write("Before querying the app")
+                st.write(f"App config: {app.llm.config.as_dict()}")
+                try:
+                    answer, citations = app.query(tweaked_prompt, config=config, citations=True)
+                    st.write("After querying the app")
+                    st.write(f"Answer: {answer}")
+                    st.write(f"Citations: {citations}")
+                except Exception as e:
+                    st.error(f"Error during app query: {e}")
+                st.write("Completed app_response function")
                 result["answer"] = answer
                 result["citations"] = citations
                 
@@ -273,7 +283,19 @@ site:www.cell.com OR site:www.nature.com OR site:www.springer.com OR site:www.wi
             thread = threading.Thread(target=app_response, args=(results,))
             thread.start()
 
-            for answer_chunk in generate(q):
+            st.write("Before generating answer chunks")
+            st.write(f"Queue size: {q.qsize()}")
+            try:
+                for answer_chunk in generate(q):
+                    st.write("Inside generate loop")
+                    st.write(f"Generated chunk: {answer_chunk}")
+                    st.write(f"Queue size after chunk: {q.qsize()}")
+                    full_response += answer_chunk
+                    msg_placeholder.markdown(full_response)
+                    st.write(f"Full response so far: {full_response}")
+            except Exception as e:
+                st.error(f"Error during answer generation: {e}")
+            st.write("Completed generating answer chunks")
                 full_response += answer_chunk
                 msg_placeholder.markdown(full_response)
 
