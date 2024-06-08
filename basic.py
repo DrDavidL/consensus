@@ -57,7 +57,7 @@ def realtime_search(query, domains, max):
 
     return snippets, urls
 
-@cached(ttl=None, cache=Cache.MEMORY)
+# @cached(ttl=None, cache=Cache.MEMORY)
 async def get_response(messages):
     async with aiohttp.ClientSession() as session:
         response = await session.post(
@@ -74,7 +74,7 @@ async def get_response(messages):
         )
         return await response.json()
 
-@cached(ttl=None, cache=Cache.MEMORY)
+# @cached(ttl=None, cache=Cache.MEMORY)
 async def get_responses(queries):
     tasks = [get_response(query) for query in queries]
     return await asyncio.gather(*tasks)
