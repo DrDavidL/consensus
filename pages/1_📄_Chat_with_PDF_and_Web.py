@@ -254,20 +254,27 @@ site:www.cell.com OR site:www.nature.com OR site:www.springer.com OR site:www.wi
             st.markdown(prompt)
 
         with st.chat_message("assistant"):
+            # Create an empty placeholder in the Streamlit app
             msg_placeholder = st.empty()
+            # Display a "Thinking..." message in the placeholder
             msg_placeholder.markdown("Thinking...")
+            # Initialize an empty string to store the full response
             full_response = ""
 
+            # Create a queue to handle streaming responses
             q = queue.Queue()
 
+            # Define a function to handle the app's response
             def app_response(result):
                 st.write("Starting app_response function")
+                # Get the LLM configuration and set up callbacks for streaming
                 llm_config = app.llm.config.as_dict()
                 llm_config["callbacks"] = [StreamingStdOutCallbackHandlerYield(q=q)]
                 config = BaseLlmConfig(**llm_config)
                 st.write("Before querying the app")
                 st.write(f"App config: {app.llm.config.as_dict()}")
                 try:
+                    # Query the app with the tweaked prompt and get the answer and citations
                     answer, citations = app.query(tweaked_prompt, config=config, citations=True)
                     st.write("After querying the app")
                     st.write(f"Answer: {answer}")
@@ -275,40 +282,52 @@ site:www.cell.com OR site:www.nature.com OR site:www.springer.com OR site:www.wi
                 except Exception as e:
                     st.error(f"Error during app query: {e}")
                 st.write("Completed app_response function")
+                # Store the answer and citations in the result dictionary
                 result["answer"] = answer
                 result["citations"] = citations
                 
 
+            # Initialize an empty dictionary to store the results
             results = {}
+            # Create a new thread to run the app_response function
             thread = threading.Thread(target=app_response, args=(results,))
+            # Start the thread
             thread.start()
 
             st.write("Before generating answer chunks")
             st.write(f"Queue size: {q.qsize()}")
             try:
+                # Generate answer chunks from the queue
                 for answer_chunk in generate(q):
                     st.write("Inside generate loop")
                     st.write(f"Generated chunk: {answer_chunk}")
                     st.write(f"Queue size after chunk: {q.qsize()}")
+                    # Append each chunk to the full response
                     full_response += answer_chunk
+                    # Update the placeholder with the full response so far
                     msg_placeholder.markdown(full_response)
                     st.write(f"Full response so far: {full_response}")
             except Exception as e:
                 st.error(f"Error during answer generation: {e}")
             st.write("Completed generating answer chunks")
 
+            # Wait for the thread to finish
             thread.join()
+            # Get the final answer and citations from the results dictionary
             answer, citations = results["answer"], results["citations"]
             if citations:
+                # Append the sources to the full response
                 full_response += "\n\n**Sources**:\n"
                 sources = []
                 for i, citation in enumerate(citations):
                     source = citation[1]["url"]
+                    # Extract the filename from the URL if it's a PDF
                     pattern = re.compile(r"([^/]+)\.[^\.]+\.pdf$")
                     match = pattern.search(source)
                     if match:
                         source = match.group(1) + ".pdf"
                     sources.append(source)
+                # Remove duplicate sources
                 sources = list(set(sources))
                 for source in sources:
                     full_response += f"- {source}\n"
