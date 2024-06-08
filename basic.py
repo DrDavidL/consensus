@@ -326,15 +326,19 @@ def main():
             q = queue.Queue()
 
             def app_response(result):
+                st.write("Starting app_response function")
                 llm_config = app.llm.config.as_dict()
                 llm_config["callbacks"] = [StreamingStdOutCallbackHandlerYield(q=q)]
                 config = BaseLlmConfig(**llm_config)
-                answer, citations = app.query(f"Using only context, generate the  best possible answer: {original_query}", config=config, citations=True)
+                st.write("Querying the app")
+                answer, citations = app.query(f"Using only context, generate the best possible answer: {original_query}", config=config, citations=True)
+                st.write("Received response from app")
                 result["answer"] = answer
                 result["citations"] = citations
                 
 
             results = {}
+            st.write("Starting thread for app_response")
             thread = threading.Thread(target=app_response, args=(results,))
             thread.start()
 
@@ -342,7 +346,9 @@ def main():
                 full_response += answer_chunk
                 msg_placeholder.markdown(full_response)
 
+            st.write("Joining thread")
             thread.join()
+            st.write("Thread joined")
             answer, citations = results["answer"], results["citations"]
             if citations:
                 full_response += "\n\n**Sources**:\n"
