@@ -10,6 +10,9 @@ import requests
 import streamlit as st
 from openai import OpenAI
 
+from aiocache import Cache
+from aiocache import cached
+
 from embedchain import App
 from embedchain.config import BaseLlmConfig
 from embedchain.helpers.callbacks import (
@@ -26,7 +29,7 @@ from prompts import (
 
 # Set your OpenAI API key
 api_key = st.secrets["OPENAI_API_KEY"]
-app = App()
+
 
 
 @st.cache_data
@@ -54,6 +57,7 @@ def realtime_search(query, domains, max):
 
     return snippets, urls
 
+@cached(ttl=None, cache=Cache.MEMORY)
 async def get_response(messages):
     async with aiohttp.ClientSession() as session:
         response = await session.post(
@@ -70,6 +74,7 @@ async def get_response(messages):
         )
         return await response.json()
 
+@cached(ttl=None, cache=Cache.MEMORY)
 async def get_responses(queries):
     tasks = [get_response(query) for query in queries]
     return await asyncio.gather(*tasks)
@@ -258,11 +263,22 @@ def check_password() -> bool:
 
 def main():
     st.title('Simultaneous LLM Queries')
-    
+    app = App()
     if "snippets" not in st.session_state:
         st.session_state["snippets"] = []
     if "urls" not in st.session_state:
         st.session_state["urls"] = []
+    if "expert1_response" not in st.session_state:
+        st.session_state["expert1_response"] = ""
+    if "expert2_response" not in st.session_state:
+        st.session_state["expert2_response"] = ""
+    if "expert3_response" not in st.session_state:  
+        st.session_state["expert3_response"] = ""
+    if "sources" not in st.session_state:
+        st.session_state["sources"] = []
+    if "rag_response" not in st.session_state:
+        st.session_state["rag_response"] = ""
+        
     
     if check_password():
     
@@ -279,7 +295,7 @@ def main():
     site:www.cell.com OR site:www.nature.com OR site:www.springer.com OR site:www.wiley.com OR site:www.ahrq.gov OR site:www.edu"""
         if st.button('Begin Research'):
             
-            all_site_text = []
+            # all_site_text = []
  
 
             
@@ -313,7 +329,7 @@ def main():
                 llm_config = app.llm.config.as_dict()
                 llm_config["callbacks"] = [StreamingStdOutCallbackHandlerYield(q=q)]
                 config = BaseLlmConfig(**llm_config)
-                answer, citations = app.query(f"Using only context, as best possible answer: {original_query}", config=config, citations=True)
+                answer, citations = app.query(f"Using only context, generate the  best possible answer: {original_query}", config=config, citations=True)
                 result["answer"] = answer
                 result["citations"] = citations
                 
@@ -418,4 +434,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-from hello import hello
+
