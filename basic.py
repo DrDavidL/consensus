@@ -332,8 +332,11 @@ def main():
                 config = BaseLlmConfig(**llm_config)
                 st.write("Before querying the app")
                 st.write(f"App config: {app.llm.config.as_dict()}")
+                st.write(f"App config: {app.llm.config.as_dict()}")
                 answer, citations = app.query(f"Using only context, generate the best possible answer: {original_query}", config=config, citations=True)
                 st.write("After querying the app")
+                st.write(f"Answer: {answer}")
+                st.write(f"Citations: {citations}")
                 result["answer"] = answer
                 result["citations"] = citations
                 
@@ -350,6 +353,7 @@ def main():
             st.write(f"Queue size: {q.qsize()}")
             st.write("Before generating answer chunks")
             for answer_chunk in generate(q):
+                st.write("Inside generate loop")
                 st.write(f"Generated chunk: {answer_chunk}")
                 st.write(f"Queue size after chunk: {q.qsize()}")
                 st.write(f"Queue size after chunk: {q.qsize()}")
