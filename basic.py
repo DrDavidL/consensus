@@ -346,16 +346,23 @@ def main():
             st.write("After starting thread")
 
             st.write("Before generating answer chunks")
+            st.write(f"Queue size: {q.qsize()}")
+            st.write(f"Queue size: {q.qsize()}")
             st.write("Before generating answer chunks")
             for answer_chunk in generate(q):
                 st.write(f"Generated chunk: {answer_chunk}")
+                st.write(f"Queue size after chunk: {q.qsize()}")
+                st.write(f"Queue size after chunk: {q.qsize()}")
                 st.write(f"Generated chunk: {answer_chunk}")
                 full_response += answer_chunk
                 msg_placeholder.markdown(full_response)
+                st.write(f"Full response so far: {full_response}")
 
             st.write("Joining thread")
+            st.write(f"Queue size before join: {q.qsize()}")
             thread.join()
             st.write("Thread joined")
+            st.write(f"Queue size after join: {q.qsize()}")
             answer, citations = results["answer"], results["citations"]
             if citations:
                 full_response += "\n\n**Sources**:\n"
