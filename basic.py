@@ -274,7 +274,7 @@ def check_password() -> bool:
 
 def main():
     st.title('Helpful Answers"!')
-    st.info("This app rephrases the question to retrieve reliable web content and also asks AI experts their opinions on the topic.")
+    st.info("This app retrieves reliable web content for an initial answer and also asks AI personas their opinions on the topic.")
     app = App()
     if "snippets" not in st.session_state:
         st.session_state["snippets"] = []
@@ -375,7 +375,7 @@ def main():
             
             completion = create_chat_completion(messages=find_experts_messages, temperature=0.3, response_format="json_object")
             with st.sidebar:
-                with st.expander("AI *Experts* Identified"):
+                with st.expander("AI Personas Identified"):
                     # st.write(f"**Response:**")
                     json_output = completion.choices[0].message.content
                     # st.write(json_output)
@@ -392,11 +392,11 @@ def main():
             updated_question3 = expert_questions[2]
             
             expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
-                                {'role': 'user', 'content': updated_question1}]
+                                {'role': 'user', 'content': updated_question1 + "Here's what I already found to help: " + full_response}]
             expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
-                                {'role': 'user', 'content': updated_question2}]
+                                {'role': 'user', 'content': updated_question2 + "Here's what I already found to help: " + full_response}}]
             expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
-                                {'role': 'user', 'content': updated_question3}]
+                                {'role': 'user', 'content': updated_question3 + "Here's what I already found to help: " + full_response}}]
             
             with st.spinner('Waiting for experts to respond...'):
                 expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
