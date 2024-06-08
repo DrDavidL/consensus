@@ -330,9 +330,10 @@ def main():
                 llm_config = app.llm.config.as_dict()
                 llm_config["callbacks"] = [StreamingStdOutCallbackHandlerYield(q=q)]
                 config = BaseLlmConfig(**llm_config)
-                st.write("Querying the app")
+                st.write("Before querying the app")
+                st.write(f"App config: {app.llm.config.as_dict()}")
                 answer, citations = app.query(f"Using only context, generate the best possible answer: {original_query}", config=config, citations=True)
-                st.write("Received response from app")
+                st.write("After querying the app")
                 result["answer"] = answer
                 result["citations"] = citations
                 
@@ -340,9 +341,13 @@ def main():
             results = {}
             st.write("Starting thread for app_response")
             thread = threading.Thread(target=app_response, args=(results,))
+            st.write("Before starting thread")
             thread.start()
+            st.write("After starting thread")
 
+            st.write("Before generating answer chunks")
             for answer_chunk in generate(q):
+                st.write(f"Generated chunk: {answer_chunk}")
                 full_response += answer_chunk
                 msg_placeholder.markdown(full_response)
 
