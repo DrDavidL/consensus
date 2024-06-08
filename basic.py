@@ -332,11 +332,13 @@ def main():
                 config = BaseLlmConfig(**llm_config)
                 st.write("Before querying the app")
                 st.write(f"App config: {app.llm.config.as_dict()}")
-                st.write(f"App config: {app.llm.config.as_dict()}")
-                answer, citations = app.query(f"Using only context, generate the best possible answer: {original_query}", config=config, citations=True)
-                st.write("After querying the app")
-                st.write(f"Answer: {answer}")
-                st.write(f"Citations: {citations}")
+                try:
+                    answer, citations = app.query(f"Using only context, generate the best possible answer: {original_query}", config=config, citations=True)
+                    st.write("After querying the app")
+                    st.write(f"Answer: {answer}")
+                    st.write(f"Citations: {citations}")
+                except Exception as e:
+                    st.error(f"Error during app query: {e}")
                 result["answer"] = answer
                 result["citations"] = citations
                 
@@ -352,15 +354,18 @@ def main():
             st.write(f"Queue size: {q.qsize()}")
             st.write(f"Queue size: {q.qsize()}")
             st.write("Before generating answer chunks")
-            for answer_chunk in generate(q):
-                st.write("Inside generate loop")
-                st.write(f"Generated chunk: {answer_chunk}")
-                st.write(f"Queue size after chunk: {q.qsize()}")
-                st.write(f"Queue size after chunk: {q.qsize()}")
-                st.write(f"Generated chunk: {answer_chunk}")
-                full_response += answer_chunk
-                msg_placeholder.markdown(full_response)
-                st.write(f"Full response so far: {full_response}")
+            try:
+                for answer_chunk in generate(q):
+                    st.write("Inside generate loop")
+                    st.write(f"Generated chunk: {answer_chunk}")
+                    st.write(f"Queue size after chunk: {q.qsize()}")
+                    st.write(f"Queue size after chunk: {q.qsize()}")
+                    st.write(f"Generated chunk: {answer_chunk}")
+                    full_response += answer_chunk
+                    msg_placeholder.markdown(full_response)
+                    st.write(f"Full response so far: {full_response}")
+            except Exception as e:
+                st.error(f"Error during answer generation: {e}")
 
             st.write("Joining thread")
             st.write(f"Queue size before join: {q.qsize()}")
