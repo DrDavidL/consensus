@@ -273,7 +273,7 @@ def check_password() -> bool:
     return True
 
 def main():
-    st.title('Helpful Answers"!')
+    st.title('Helpful Answers with AI!')
     st.info("This app retrieves reliable web content for an initial answer and also asks AI personas their opinions on the topic.")
     app = App()
     if "snippets" not in st.session_state:
