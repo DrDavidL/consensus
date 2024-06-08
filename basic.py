@@ -339,6 +339,7 @@ def main():
                     st.write(f"Citations: {citations}")
                 except Exception as e:
                     st.error(f"Error during app query: {e}")
+                st.write("Completed app_response function")
                 result["answer"] = answer
                 result["citations"] = citations
                 
@@ -366,6 +367,7 @@ def main():
                     st.write(f"Full response so far: {full_response}")
             except Exception as e:
                 st.error(f"Error during answer generation: {e}")
+            st.write("Completed generating answer chunks")
 
             st.write("Joining thread")
             st.write(f"Queue size before join: {q.qsize()}")
