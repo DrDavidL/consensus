@@ -296,8 +296,6 @@ site:www.cell.com OR site:www.nature.com OR site:www.springer.com OR site:www.wi
             except Exception as e:
                 st.error(f"Error during answer generation: {e}")
             st.write("Completed generating answer chunks")
-                full_response += answer_chunk
-                msg_placeholder.markdown(full_response)
 
             thread.join()
             answer, citations = results["answer"], results["citations"]
