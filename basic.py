@@ -366,29 +366,6 @@ def main():
 
             
             
-        with st.sidebar:
-            with st.expander("View Search Result Snippets"):
-                if st.session_state.snippets:
-                    for snippet in st.session_state.snippets:
-                        snippet = snippet.replace('<END OF SITE>', '')
-                        st.markdown(snippet)
-                else:
-                    st.markdown("No search results found!")
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
-            
             
             # *************************************************
             
@@ -437,6 +414,15 @@ def main():
         #     for i, response in enumerate(responses):
         #         st.write(f"**Response {i+1}:**")
         #         st.write(response['choices'][0]['message']['content'])
+
+        with st.sidebar:
+            with st.expander("View Search Result Snippets"):
+                if st.session_state.snippets:
+                    for snippet in st.session_state.snippets:
+                        snippet = snippet.replace('<END OF SITE>', '')
+                        st.markdown(snippet)
+                else:
+                    st.markdown("No search results found!")
 
 if __name__ == '__main__':
     main()
