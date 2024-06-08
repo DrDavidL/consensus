@@ -273,7 +273,8 @@ def check_password() -> bool:
     return True
 
 def main():
-    st.title('Simultaneous LLM Queries')
+    st.title('Helpful Answers"!')
+    st.info("This app rephrases the question to retrieve reliable web content and also asks AI experts their opinions on the topic.")
     app = App()
     if "snippets" not in st.session_state:
         st.session_state["snippets"] = []
@@ -374,14 +375,14 @@ def main():
             
             completion = create_chat_completion(messages=find_experts_messages, temperature=0.3, response_format="json_object")
             with st.sidebar:
-                with st.expander("Experts Identified"):
-                    st.write(f"**Response:**")
+                with st.expander("AI *Experts* Identified"):
+                    # st.write(f"**Response:**")
                     json_output = completion.choices[0].message.content
-                    st.write(json_output)
+                    # st.write(json_output)
                     experts, domains, expert_questions = extract_expert_info(json_output)
                     st.write(f"**Experts:** {experts}")
-                    st.write(f"**Domains:** {domains}")
-                    st.write(f"**Expert Questions:** {expert_questions}")
+                    # st.write(f"**Domains:** {domains}")
+                    # st.write(f"**Expert Questions:** {expert_questions}")
             
             updated_expert1_system_prompt = expert1_system_prompt.format(expert=experts[0], domain=domains[0])
             updated_expert2_system_prompt = expert2_system_prompt.format(expert=experts[1], domain=domains[1])
