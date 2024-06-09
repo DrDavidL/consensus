@@ -328,22 +328,29 @@ def main():
                                 {'role': 'user', 'content': original_query}]
         
         site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=6, step=1)
-        restrict_domains = st.checkbox("Restrict search to reliable medical domains", value=False)
+        # Define the domain strings
         medical_domains = """site:www.nih.gov OR site:www.ncbi.nlm.nih.gov/books OR site:www.cdc.gov OR site:www.who.int OR site:www.pubmed.gov OR site:www.cochranelibrary.com OR 
-    site:www.uptodate.com OR site:www.medscape.com OR site:www.ama-assn.org OR site:www.nejm.org OR 
-    site:www.bmj.com OR site:www.thelancet.com OR site:www.jamanetwork.com OR site:www.mayoclinic.org OR site:www.acpjournals.org OR 
-    site:www.cell.com OR site:www.nature.com OR site:www.springer.com OR site:www.wiley.com OR site:www.ahrq.gov OR site:www.edu"""
+        site:www.uptodate.com OR site:www.medscape.com OR site:www.ama-assn.org OR site:www.nejm.org OR 
+        site:www.bmj.com OR site:www.thelancet.com OR site:www.jamanetwork.com OR site:www.mayoclinic.org OR site:www.acpjournals.org OR 
+        site:www.cell.com OR site:www.nature.com OR site:www.springer.com OR site:www.wiley.com OR site:www.ahrq.gov OR site:www.edu"""
+
+        reliable_domains = """site:www.cnn.com OR site:www.bbc.com OR site:www.npr.org OR site:www.reuters.com OR site:www.theguardian.com OR 
+        site:www.nytimes.com OR site:www.washingtonpost.com OR site:www.nbcnews.com OR site:www.cbsnews.com OR site:www.abcnews.go.com OR 
+        site:www.apnews.com OR site:www.bloomberg.com OR site:www.forbes.com OR site:www.nationalgeographic.com OR site:www.scientificamerican.com OR 
+        site:www.nature.com OR site:www.newscientist.com OR site:www.smithsonianmag.com OR site:www.wikipedia.org OR site:www.history.com"""
+
+        # Add radio buttons for domain selection
+        restrict_domains = st.radio("Restrict domains to:", options=["Medical", "General Knowledge", "Full Internet"], horizontal=True)
+
+        # Update the `domains` variable based on the selection
+        if restrict_domains == "Medical":
+            domains = medical_domains
+        elif restrict_domains == "General Knowledge":
+            domains = reliable_domains
+        else:
+            domains = ""  # Full Internet option doesn't restrict domains
+        
         if st.button('Begin Research'):
-            
-
- 
-
-            
-
-            if restrict_domains:
-                domains = medical_domains
-            else:
-                domains = ""
             
             search_messages = [{'role': 'system', 'content': optimize_search_terms_system_prompt},
                                 {'role': 'user', 'content': original_query}]    
@@ -366,7 +373,7 @@ def main():
 
             if blocked_sites:
                 with st.sidebar:
-                    with st.expander("Sites Blocked"):
+                    with st.expander("Sites Blocking Use"):
                         for site in blocked_sites:
                             st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
 
