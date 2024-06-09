@@ -126,7 +126,7 @@ analysis of relevant guidelines, research, and expert opinions to ensure accurac
 
 {expert} Perspective:
 Rephrased Question(s):
-Bottomline Concise Answer:[up to one paragraph]
+Bottomline:[up to one paragraph; may be difficult but **take a position and clearly answer the question**; can include caveats.]
 <Markdown Table if applicable>
 Detailed Answer:[up to 4 paragraphs]
 <Verification and confidence assessment>
@@ -155,7 +155,7 @@ As an expert in **{domain}**, provide an exhaustive, evidence-based answer to th
 
 {expert} Perspective:
 Rephrased Question(s):
-Bottomline Concise Answer:[up to one paragraph]
+Bottomline:[up to one paragraph; may be difficult but **take a position and clearly answer the question**; can include caveats.]
 <Markdown Table if applicable>
 Detailed Answer:[up to 4 paragraphs]
 <Verification and confidence assessment>
@@ -183,7 +183,7 @@ In your capacity as an expert in **{domain}**, provide a detailed, evidence-base
 
 {expert} Perspective:
 Rephrased Question(s):
-Bottomline Concise Answer:[up to one paragraph]
+Bottomline:[up to one paragraph; may be difficult but **take a position and clearly answer the question**; can include caveats.]
 <Markdown Table if applicable>
 Detailed Answer:[up to 4 paragraphs]
 <Verification and confidence assessment>

@@ -26,7 +26,13 @@ from prompts import (
 # Set your OpenAI API key
 api_key = st.secrets["OPENAI_API_KEY"]
 
-
+# Function to replace the first user message
+def replace_first_user_message(messages, new_message):
+    for i, message in enumerate(messages):
+        if message["role"] == "user":
+            messages[i] = new_message
+            break
+        
 
 def realtime_search(query, domains, max, start_year=2020):
     url = "https://real-time-web-search.p.rapidapi.com/search"
@@ -275,7 +281,7 @@ def check_password() -> bool:
 
 def main():
     st.title('Helpful Answers with AI!')
-    st.info("This app retrieves reliable web content for an initial answer and also asks AI personas their opinions on the topic.")
+    st.info("This app retrieves content from limited internet domains for an initial answer and asks AI personas their opinions on the topic.")
     app = App()
     if "snippets" not in st.session_state:
         st.session_state["snippets"] = []
@@ -319,11 +325,15 @@ def main():
     if "expert_answers" not in st.session_state:
         st.session_state.expert_answers = []
         
+    if "original_question" not in st.session_state:
+        st.session_state.original_question = ""
+        
     
     if check_password():
     
         # Obtain the initial query from the user
         original_query = st.text_input('Original Query', placeholder='Enter your question here...')
+        st.session_state.original_question = original_query
         find_experts_messages = [{'role': 'system', 'content': system_prompt_expert_questions}, 
                                 {'role': 'user', 'content': original_query}]
         
@@ -340,7 +350,7 @@ def main():
         site:www.nature.com OR site:www.newscientist.com OR site:www.smithsonianmag.com OR site:www.wikipedia.org OR site:www.history.com"""
 
         # Add radio buttons for domain selection
-        restrict_domains = st.radio("Restrict domains to:", options=["Medical", "General Knowledge", "Full Internet"], horizontal=True)
+        restrict_domains = st.radio("Restrict domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True)
 
         # Update the `domains` variable based on the selection
         if restrict_domains == "Medical":
@@ -349,64 +359,75 @@ def main():
             domains = reliable_domains
         else:
             domains = ""  # Full Internet option doesn't restrict domains
+
+        # Checkbox to reveal and edit domains
+        if restrict_domains != "No Internet":
+            edit_domains = st.checkbox("Reveal and Edit Selected Domains")
+
+            # Display the selected domains in a text area if the checkbox is checked
+            if edit_domains:
+                domains = st.text_area("Edit domains (maintain format pattern):", domains)
         
         if st.button('Begin Research'):
+            app.reset()
             
-            search_messages = [{'role': 'system', 'content': optimize_search_terms_system_prompt},
-                                {'role': 'user', 'content': original_query}]    
-            response_google_search_terms = create_chat_completion(search_messages, temperature=0.3, )
-            google_search_terms = response_google_search_terms.choices[0].message.content
-            with st.spinner(f'Searching for "{google_search_terms}"...'):
-                st.session_state.snippets, st.session_state.urls = realtime_search(google_search_terms, domains, site_number)
+            if restrict_domains != "No Internet":
             
-            # Initialize a list to store blocked sites
-            blocked_sites = []
-            
-            with st.spinner('Retrieving full content from web pages...'):
-                for site in st.session_state.urls:
-                    try:
-                        app.add(site, data_type='web_page')
-                        
-                    except Exception as e:
-                        # Collect the blocked sites
-                        blocked_sites.append(site)
+                search_messages = [{'role': 'system', 'content': optimize_search_terms_system_prompt},
+                                    {'role': 'user', 'content': original_query}]    
+                response_google_search_terms = create_chat_completion(search_messages, temperature=0.3, )
+                google_search_terms = response_google_search_terms.choices[0].message.content
+                with st.spinner(f'Searching for "{google_search_terms}"...'):
+                    st.session_state.snippets, st.session_state.urls = realtime_search(google_search_terms, domains, site_number)
+                
+                # Initialize a list to store blocked sites
+                blocked_sites = []
+                
+                with st.spinner('Retrieving full content from web pages...'):
+                    for site in st.session_state.urls:
+                        try:
+                            app.add(site, data_type='web_page')
+                            
+                        except Exception as e:
+                            # Collect the blocked sites
+                            blocked_sites.append(site)
 
-            if blocked_sites:
-                with st.sidebar:
-                    with st.expander("Sites Blocking Use"):
-                        for site in blocked_sites:
-                            st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
+                if blocked_sites:
+                    with st.sidebar:
+                        with st.expander("Sites Blocking Use"):
+                            for site in blocked_sites:
+                                st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
 
 
-            llm_config = app.llm.config.as_dict()  
-            config = BaseLlmConfig(**llm_config) 
-            with st.spinner('Analyzing retrieved content...'):
-                try:                                                                                        
-                    answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {google_search_terms}", config=config, citations=True)                                               
-                except Exception as e:   
-                    st.error(f"Error during app query: {e}")                                                                   
-  
-            full_response = ""
-            if answer:                  
-                full_response = f"**Answer from web resources:** {answer} \n\n Search terms: {google_search_terms} \n\n"
-                                  
-            if citations:                                                                                           
-                full_response += "\n\n**Sources**:\n"                                                   
-                sources = []                                                                            
-                for i, citation in enumerate(citations):                                                
-                    source = citation[1]["url"]                                                         
-                    pattern = re.compile(r"([^/]+)\.[^\.]+\.pdf$")                                      
-                    match = pattern.search(source)                                                      
-                    if match:                                                                           
-                        source = match.group(1) + ".pdf"                                                
-                    sources.append(source)                                                              
-                sources = list(set(sources))                                                            
-                for source in sources:                                                                  
-                    full_response += f"- {source}\n"      
-            st.markdown(full_response)
-            
-            st.session_state.rag_response = full_response
-            st.session_state.source_chunks = refine_output(citations)
+                llm_config = app.llm.config.as_dict()  
+                config = BaseLlmConfig(**llm_config) 
+                with st.spinner('Analyzing retrieved content...'):
+                    try:                                                                                        
+                        answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {google_search_terms}", config=config, citations=True)                                               
+                    except Exception as e:   
+                        st.error(f"Error during app query: {e}")                                                                   
+    
+                full_response = ""
+                if answer:                  
+                    full_response = f"**Answer from web resources:** {answer} \n\n Search terms: {google_search_terms} \n\n"
+                                    
+                if citations:                                                                                           
+                    full_response += "\n\n**Sources**:\n"                                                   
+                    sources = []                                                                            
+                    for i, citation in enumerate(citations):                                                
+                        source = citation[1]["url"]                                                         
+                        pattern = re.compile(r"([^/]+)\.[^\.]+\.pdf$")                                      
+                        match = pattern.search(source)                                                      
+                        if match:                                                                           
+                            source = match.group(1) + ".pdf"                                                
+                        sources.append(source)                                                              
+                    sources = list(set(sources))                                                            
+                    for source in sources:                                                                  
+                        full_response += f"- {source}\n"      
+                st.markdown(full_response)
+                
+                st.session_state.rag_response = full_response
+                st.session_state.source_chunks = refine_output(citations)
 
 
 
@@ -420,7 +441,9 @@ def main():
                     # st.write(json_output)
                     experts, domains, expert_questions = extract_expert_info(json_output)
                     st.session_state.experts = experts
-                    st.write(f"**Experts:** {st.session_state.experts}")
+                    for expert in st.session_state.experts:
+                        st.write(f"**{expert}**")
+                    # st.write(f"**Experts:** {st.session_state.experts}")
                     # st.write(f"**Domains:** {domains}")
                     # st.write(f"**Expert Questions:** {expert_questions}")
             
@@ -431,15 +454,27 @@ def main():
             updated_question2 = expert_questions[1]
             updated_question3 = expert_questions[2]
             
-            expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
-                                {'role': 'user', 'content': updated_question1 + "Here's what I already found online: " + full_response}]
-            st.session_state.messages1 = expert1_messages
-            expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
-                                {'role': 'user', 'content': updated_question2 + "Here's what I already found online: " + full_response}]
-            st.session_state.messages2 = expert2_messages
-            expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
-                                {'role': 'user', 'content': updated_question3 + "Here's what I already found online: " + full_response}]
-            st.session_state.messages3 = expert3_messages
+            if restrict_domains != "No Internet":
+                expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
+                                    {'role': 'user', 'content': updated_question1 + "Here's what I already found online: " + full_response}]
+                st.session_state.messages1 = expert1_messages
+                expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
+                                    {'role': 'user', 'content': updated_question2 + "Here's what I already found online: " + full_response}]
+                st.session_state.messages2 = expert2_messages
+                expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
+                                    {'role': 'user', 'content': updated_question3 + "Here's what I already found online: " + full_response}]
+                st.session_state.messages3 = expert3_messages
+                
+            else:
+                expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
+                                    {'role': 'user', 'content': updated_question1}]
+                st.session_state.messages1 = expert1_messages
+                expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
+                                    {'role': 'user', 'content': updated_question2}]
+                st.session_state.messages2 = expert2_messages
+                expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
+                                    {'role': 'user', 'content': updated_question3}]
+                st.session_state.messages3 = expert3_messages
             
             with st.spinner('Waiting for experts to respond...'):
                 st.session_state.expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
@@ -502,27 +537,29 @@ def main():
                     full_conversation = ""
                     for message in st.session_state.followup_messages:
                         if message['role'] != 'system':
-                            full_conversation += f"{message['role']}: {message['content']}\n"
+                            full_conversation += f"{message['role']}: {message['content']}\n\n"
                     
                     html = markdown2.markdown(full_conversation, extras=["tables"])
                     st.download_button('Download Followup Responses', html, f'followup_responses.html', 'text/html')
         
-        if st.session_state.followup_messages:            
-            with st.sidebar:
-                with st.expander("Followup Conversation"):
-                    full_conversation = ""
-                    for message in st.session_state.followup_messages:
-                        if message['role'] != 'system':
-                            full_conversation += f"{message['role']}: {message['content']}\n"
-                    st.write(full_conversation)
-                    
-                    
         if st.session_state.snippets:
             with st.sidebar:
                 with st.expander("View Links from Internet Search"):
                     for snippet in st.session_state.snippets:
                         snippet = snippet.replace('<END OF SITE>', '')
                         st.markdown(snippet)
+        
+        
+        if st.session_state.followup_messages:            
+            with st.sidebar:
+                with st.expander("Followup Conversation"):
+                    full_conversation = ""
+                    replace_first_user_message(st.session_state.followup_messages, {"role": "user", "content": st.session_state.original_question})
+                    for message in st.session_state.followup_messages:
+                        if message['role'] != 'system':
+                            full_conversation += f"{message['role']}: {message['content']}\n\n"
+                    full_conversation = full_conversation.replace("assistant:", "")
+                    st.write(full_conversation)
 
 
 if __name__ == '__main__':
