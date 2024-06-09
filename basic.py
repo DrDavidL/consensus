@@ -355,13 +355,14 @@ def main():
             # Initialize a list to store blocked sites
             blocked_sites = []
             
-            for site in st.session_state.urls:
-                try:
-                    app.add(site, data_type='web_page')
-                    
-                except Exception as e:
-                    # Collect the blocked sites
-                    blocked_sites.append(site)
+            with st.spinner('Retrieving full content from web pages...'):
+                for site in st.session_state.urls:
+                    try:
+                        app.add(site, data_type='web_page')
+                        
+                    except Exception as e:
+                        # Collect the blocked sites
+                        blocked_sites.append(site)
 
             if blocked_sites:
                 with st.sidebar:
@@ -449,19 +450,12 @@ def main():
             
 
 
-        with st.sidebar:
-            with st.expander("View Search Result Snippets", expanded=True):
-                if st.session_state.snippets:
-                    for snippet in st.session_state.snippets:
-                        snippet = snippet.replace('<END OF SITE>', '')
-                        st.markdown(snippet)
-                else:
-                    st.markdown("No search results found!")
-                    
-        with st.sidebar:
-            with st.expander("Web Response and Sources"):
-                st.write(st.session_state.rag_response)
-                st.write(st.session_state.source_chunks)
+        
+        if st.session_state.rag_response:            
+            with st.sidebar:
+                with st.expander("Web Response and Sources"):
+                    st.write(st.session_state.rag_response)
+                    st.write(st.session_state.source_chunks)
                 
         if st.checkbox("Ask a Followup Question"):
             expert_chosen = st.selectbox("Choose an expert to ask a followup question:", st.session_state.experts)
@@ -505,13 +499,23 @@ def main():
                     
                     html = markdown2.markdown(full_conversation, extras=["tables"])
                     st.download_button('Download Followup Responses', html, f'followup_responses.html', 'text/html')
+        
+        if st.session_state.followup_messages:            
+            with st.sidebar:
+                with st.expander("Followup Conversation"):
+                    full_conversation = ""
+                    for message in st.session_state.followup_messages:
+                        if message['role'] != 'system':
+                            full_conversation += f"{message['role']}: {message['content']}\n"
+                    st.write(full_conversation)
                     
-        with st.sidebar:
-            with st.expander("Followup Conversation"):
-                full_conversation = ""
-                for message in st.session_state.followup_messages:
-                    full_conversation += f"{message['role']}: {message['content']}\n"
-                st.write(full_conversation)
+                    
+        if st.session_state.snippets:
+            with st.sidebar:
+                with st.expander("View Links from Internet Search"):
+                    for snippet in st.session_state.snippets:
+                        snippet = snippet.replace('<END OF SITE>', '')
+                        st.markdown(snippet)
 
 
 if __name__ == '__main__':
