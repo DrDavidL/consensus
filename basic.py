@@ -8,6 +8,7 @@ import aiohttp
 import requests
 import streamlit as st
 from openai import OpenAI
+import markdown2
 
 
 from embedchain import App
@@ -296,6 +297,24 @@ def main():
         
     if "source_chunks" not in st.session_state:
         st.session_state.source_chunks = ''
+    
+    if "experts" not in st.session_state:
+        st.session_state.experts = []
+        
+    if "messages1" not in st.session_state:
+        st.session_state.messages1 = []
+        
+    if "messages2" not in st.session_state:
+        st.session_state.messages2 = []
+    
+    if "messages3" not in st.session_state:
+        st.session_state.messages3 = []
+        
+    if "followup_messages" not in st.session_state:
+        st.session_state.followup_messages = []
+        
+    if "expert_number" not in st.session_state:
+        st.session_state.expert_number = 0
         
     
     if check_password():
@@ -380,7 +399,8 @@ def main():
                     json_output = completion.choices[0].message.content
                     # st.write(json_output)
                     experts, domains, expert_questions = extract_expert_info(json_output)
-                    st.write(f"**Experts:** {experts}")
+                    st.session_state.experts = experts
+                    st.write(f"**Experts:** {st.session_state.experts}")
                     # st.write(f"**Domains:** {domains}")
                     # st.write(f"**Expert Questions:** {expert_questions}")
             
@@ -392,16 +412,20 @@ def main():
             updated_question3 = expert_questions[2]
             
             expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
-                                {'role': 'user', 'content': updated_question1 + "Here's what I already found to help: " + full_response}]
+                                {'role': 'user', 'content': updated_question1 + "Here's what I already found online: " + full_response}]
+            st.session_state.messages1 = expert1_messages
             expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
-                                {'role': 'user', 'content': updated_question2 + "Here's what I already found to help: " + full_response}]
+                                {'role': 'user', 'content': updated_question2 + "Here's what I already found online: " + full_response}]
+            st.session_state.messages2 = expert2_messages
             expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
-                                {'role': 'user', 'content': updated_question3 + "Here's what I already found to help: " + full_response}]
+                                {'role': 'user', 'content': updated_question3 + "Here's what I already found online: " + full_response}]
+            st.session_state.messages3 = expert3_messages
             
             with st.spinner('Waiting for experts to respond...'):
                 expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
             for i, response in enumerate(expert_answers):
                 with st.expander(f"AI {experts[i]} Perspective"):
+                    st.session_state.messages[i+1].append({"role": "assistant", "content": f"{experts[i]}: {response['choices'][0]['message']['content']}"})
                     st.write(response['choices'][0]['message']['content'])
 
 
@@ -418,6 +442,56 @@ def main():
             with st.expander("Web Response and Sources"):
                 st.write(st.session_state.rag_response)
                 st.write(st.session_state.source_chunks)
+                
+        if st.checkbox("Ask a Followup Question"):
+            expert_chosen = st.selectbox("Choose an expert to ask a followup question:", st.session_state.experts)
+            experts = st.session_state.experts
+            if experts:
+                if expert_chosen == experts[0]:
+                    st.session_state.followup_messages = st.session_state.messages1 
+                    st.session_state.expert_number =1
+                    
+                elif expert_chosen == experts[1]:
+                    st.session_state.followup_messages = st.session_state.messages2 
+                    st.session_state.expert_number =2
+                    
+                elif expert_chosen == experts[2]:
+                    st.session_state.followup_messages = st.session_state.messages3 
+                    st.session_state.expert_number =3
+                    
+            
+            if prompt := st.chat_input("Ask followup!"):
+                st.session_state.followup_messages.append({"role": "user", "content": prompt})
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+
+                with st.chat_message("assistant"):
+                    client = OpenAI()
+                    stream = client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {"role": m["role"], "content": m["content"]}
+                            for m in st.session_state.followup_messages
+                        ],
+                        stream=True,
+                    )
+                    st.write(experts[st.session_state.expert_number-1] + ": ")
+                    response = st.write_stream(stream)
+                    st.session_state.followup_messages.append({"role": "assistant", "content": f"{experts[st.session_state.expert_number -1]}: {response}"})
+                    full_conversation = ""
+                    for message in st.session_state.followup_messages:
+                        full_conversation += f"{message['role']}: {message['content']}\n"
+                    
+                    html = markdown2.markdown(full_conversation, extras=["tables"])
+                    st.download_button('Download Followup Responses', html, f'followup_responses.html', 'text/html')
+                    
+        with st.sidebar:
+            with st.expander("Followup Conversation"):
+                full_conversation = ""
+                for message in st.session_state.followup_messages:
+                    full_conversation += f"{message['role']}: {message['content']}\n"
+                st.write(full_conversation)
+
 
 if __name__ == '__main__':
     main()
