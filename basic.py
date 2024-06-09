@@ -351,13 +351,22 @@ def main():
             google_search_terms = response_google_search_terms.choices[0].message.content
             with st.spinner(f'Searching for "{google_search_terms}"...'):
                 st.session_state.snippets, st.session_state.urls = realtime_search(google_search_terms, domains, site_number)
+            
+            # Initialize a list to store blocked sites
+            blocked_sites = []
+            
             for site in st.session_state.urls:
                 try:
                     app.add(site, data_type='web_page')
                     
                 except Exception as e:
-                    with st.sidebar:
-                        with st.expander("Sites Blocked"):
+                    # Collect the blocked sites
+                    blocked_sites.append(site)
+
+            if blocked_sites:
+                with st.sidebar:
+                    with st.expander("Sites Blocked"):
+                        for site in blocked_sites:
                             st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
 
 
@@ -491,7 +500,8 @@ def main():
                     st.session_state.followup_messages.append({"role": "assistant", "content": f"{experts[st.session_state.expert_number -1]}: {response}"})
                     full_conversation = ""
                     for message in st.session_state.followup_messages:
-                        full_conversation += f"{message['role']}: {message['content']}\n"
+                        if message['role'] != 'system':
+                            full_conversation += f"{message['role']}: {message['content']}\n"
                     
                     html = markdown2.markdown(full_conversation, extras=["tables"])
                     st.download_button('Download Followup Responses', html, f'followup_responses.html', 'text/html')
