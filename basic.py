@@ -316,6 +316,9 @@ def main():
     if "expert_number" not in st.session_state:
         st.session_state.expert_number = 0
         
+    if "expert_answers" not in st.session_state:
+        st.session_state.expert_answers = []
+        
     
     if check_password():
     
@@ -422,11 +425,19 @@ def main():
             st.session_state.messages3 = expert3_messages
             
             with st.spinner('Waiting for experts to respond...'):
-                expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
-            for i, response in enumerate(expert_answers):
-                with st.expander(f"AI {experts[i]} Perspective"):
-                    st.session_state.messages[i+1].append({"role": "assistant", "content": f"{experts[i]}: {response['choices'][0]['message']['content']}"})
-                    st.write(response['choices'][0]['message']['content'])
+                st.session_state.expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
+        
+        if st.session_state.expert_answers:   
+            with st.expander(f'AI {st.session_state.experts[0]} Perspective'):
+                st.write(st.session_state.expert_answers[0]['choices'][0]['message']['content'])
+                st.session_state.messages1.append({"role": "assistant", "content": st.session_state.expert_answers[0]['choices'][0]['message']['content']})
+            with st.expander(f'AI {st.session_state.experts[1]} Perspective'):
+                st.write(st.session_state.expert_answers[1]['choices'][0]['message']['content'])
+                st.session_state.messages2.append({"role": "assistant", "content": st.session_state.expert_answers[1]['choices'][0]['message']['content']})
+            with st.expander(f'AI {st.session_state.experts[2]} Perspective'):
+                st.write(st.session_state.expert_answers[2]['choices'][0]['message']['content'])
+                st.session_state.messages3.append({"role": "assistant", "content": st.session_state.expert_answers[2]['choices'][0]['message']['content']})
+            
 
 
         with st.sidebar:

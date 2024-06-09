@@ -138,3 +138,4 @@ $RECYCLE.BIN/
 cache*
 .aider*
 db/chroma.sqlite3
+db/74fef158-da3e-4b88-9cf5-a099376e0885/index_metadata.pickle
