@@ -281,7 +281,7 @@ def check_password() -> bool:
 
 def main():
     st.title('Helpful Answers with AI!')
-    with st.expander("Abou this app"):
+    with st.expander("About this app"):
         st.info("""This app retrieves content from specific internet domains for an initial answer and asks AI personas their 
                 opinions on the topic. Approaches shown to improve outputs like [chain of thought](https://arxiv.org/abs/2201.11903), 
                 [expert rephrasing](https://arxiv.org/html/2311.04205v2), and [chain of verification](https://arxiv.org/abs/2309.11495)
@@ -290,6 +290,8 @@ def main():
                 and the [EmbedChain](https://embedchain.ai/) library. The LLM model is [GPT-4o](https://openai.com/index/hello-gpt-4o/) from OpenAI.
                 App author is David Liebovitz, MD
                 """)
+        site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=6, step=1)
+        
     app = App()
     if "snippets" not in st.session_state:
         st.session_state["snippets"] = []
@@ -345,7 +347,7 @@ def main():
         find_experts_messages = [{'role': 'system', 'content': system_prompt_expert_questions}, 
                                 {'role': 'user', 'content': original_query}]
         
-        site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=6, step=1)
+
         # Define the domain strings
         medical_domains = """site:www.nih.gov OR site:www.ncbi.nlm.nih.gov/books OR site:www.cdc.gov OR site:www.who.int OR site:www.pubmed.gov OR site:www.cochranelibrary.com OR 
         site:www.uptodate.com OR site:www.medscape.com OR site:www.ama-assn.org OR site:www.nejm.org OR 
@@ -374,7 +376,7 @@ def main():
 
             # Display the selected domains in a text area if the checkbox is checked
             if edit_domains:
-                domains = st.text_area("Edit domains (maintain format pattern):", domains)
+                domains = st.text_area("Edit domains (maintain format pattern):", domains, height=200)
         
         if st.button('Begin Research'):
             app.reset()
@@ -486,7 +488,7 @@ def main():
             
             with st.spinner('Waiting for experts to respond...'):
                 st.session_state.expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
-        
+        st.divider()
         if st.session_state.expert_answers:   
             with st.expander(f'AI {st.session_state.experts[0]} Perspective'):
                 st.write(st.session_state.expert_answers[0]['choices'][0]['message']['content'])
