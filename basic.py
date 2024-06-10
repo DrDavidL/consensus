@@ -360,7 +360,7 @@ def main():
         site:www.nature.com OR site:www.newscientist.com OR site:www.smithsonianmag.com OR site:www.wikipedia.org OR site:www.history.com"""
 
         # Add radio buttons for domain selection
-        restrict_domains = st.radio("Restrict domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True)
+        restrict_domains = st.radio("Restrict Internet search domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True)
 
         # Update the `domains` variable based on the selection
         if restrict_domains == "Medical":
