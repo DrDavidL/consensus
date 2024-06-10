@@ -491,6 +491,7 @@ def main():
                 st.session_state.expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
 
         if st.session_state.expert_answers:   
+            st.divider()
             with st.expander(f'AI {st.session_state.experts[0]} Perspective'):
                 st.write(st.session_state.expert_answers[0]['choices'][0]['message']['content'])
                 st.session_state.messages1.append({"role": "assistant", "content": st.session_state.expert_answers[0]['choices'][0]['message']['content']})
