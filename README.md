@@ -1,5 +1,7 @@
 ## Clone, install requirements, set your own password, and obtain a Rapid Web Search API key and an OpenAI API key.
 
+### Note main app is basic.py 
+
 This app retrieves content from specific internet domains for an initial answer and asks AI personas their 
 opinions on the topic. Approaches shown to improve outputs like [chain of thought](https://arxiv.org/abs/2201.11903), 
 [expert rephrasing](https://arxiv.org/html/2311.04205v2), and [chain of verification](https://arxiv.org/abs/2309.11495)
