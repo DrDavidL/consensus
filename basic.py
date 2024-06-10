@@ -379,6 +379,7 @@ def main():
                 domains = st.text_area("Edit domains (maintain format pattern):", domains, height=200)
         
         if st.button('Begin Research'):
+            st.divider()
             app.reset()
             
             if restrict_domains != "No Internet":
@@ -488,7 +489,7 @@ def main():
             
             with st.spinner('Waiting for experts to respond...'):
                 st.session_state.expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
-        st.divider()
+
         if st.session_state.expert_answers:   
             with st.expander(f'AI {st.session_state.experts[0]} Perspective'):
                 st.write(st.session_state.expert_answers[0]['choices'][0]['message']['content'])
