@@ -508,49 +508,50 @@ def main():
                 with st.expander("Web Response and Sources"):
                     st.write(st.session_state.rag_response)
                     st.write(st.session_state.source_chunks)
+        
+        if st.session_state.messages1:        
+            if st.checkbox("Ask a Followup Question"):
+                expert_chosen = st.selectbox("Choose an expert to ask a followup question:", st.session_state.experts)
+                experts = st.session_state.experts
+                if experts:
+                    if expert_chosen == experts[0]:
+                        st.session_state.followup_messages = st.session_state.messages1 
+                        st.session_state.expert_number =1
+                        
+                    elif expert_chosen == experts[1]:
+                        st.session_state.followup_messages = st.session_state.messages2 
+                        st.session_state.expert_number =2
+                        
+                    elif expert_chosen == experts[2]:
+                        st.session_state.followup_messages = st.session_state.messages3 
+                        st.session_state.expert_number =3
+                        
                 
-        if st.checkbox("Ask a Followup Question"):
-            expert_chosen = st.selectbox("Choose an expert to ask a followup question:", st.session_state.experts)
-            experts = st.session_state.experts
-            if experts:
-                if expert_chosen == experts[0]:
-                    st.session_state.followup_messages = st.session_state.messages1 
-                    st.session_state.expert_number =1
-                    
-                elif expert_chosen == experts[1]:
-                    st.session_state.followup_messages = st.session_state.messages2 
-                    st.session_state.expert_number =2
-                    
-                elif expert_chosen == experts[2]:
-                    st.session_state.followup_messages = st.session_state.messages3 
-                    st.session_state.expert_number =3
-                    
-            
-            if prompt := st.chat_input("Ask followup!"):
-                st.session_state.followup_messages.append({"role": "user", "content": prompt})
-                with st.chat_message("user"):
-                    st.markdown(prompt)
+                if prompt := st.chat_input("Ask followup!"):
+                    st.session_state.followup_messages.append({"role": "user", "content": prompt})
+                    with st.chat_message("user"):
+                        st.markdown(prompt)
 
-                with st.chat_message("assistant"):
-                    client = OpenAI()
-                    stream = client.chat.completions.create(
-                        model="gpt-4o",
-                        messages=[
-                            {"role": m["role"], "content": m["content"]}
-                            for m in st.session_state.followup_messages
-                        ],
-                        stream=True,
-                    )
-                    st.write(experts[st.session_state.expert_number-1] + ": ")
-                    response = st.write_stream(stream)
-                    st.session_state.followup_messages.append({"role": "assistant", "content": f"{experts[st.session_state.expert_number -1]}: {response}"})
-                    full_conversation = ""
-                    for message in st.session_state.followup_messages:
-                        if message['role'] != 'system':
-                            full_conversation += f"{message['role']}: {message['content']}\n\n"
-                    
-                    html = markdown2.markdown(full_conversation, extras=["tables"])
-                    st.download_button('Download Followup Responses', html, f'followup_responses.html', 'text/html')
+                    with st.chat_message("assistant"):
+                        client = OpenAI()
+                        stream = client.chat.completions.create(
+                            model="gpt-4o",
+                            messages=[
+                                {"role": m["role"], "content": m["content"]}
+                                for m in st.session_state.followup_messages
+                            ],
+                            stream=True,
+                        )
+                        st.write(experts[st.session_state.expert_number-1] + ": ")
+                        response = st.write_stream(stream)
+                        st.session_state.followup_messages.append({"role": "assistant", "content": f"{experts[st.session_state.expert_number -1]}: {response}"})
+                        full_conversation = ""
+                        for message in st.session_state.followup_messages:
+                            if message['role'] != 'system':
+                                full_conversation += f"{message['role']}: {message['content']}\n\n"
+                        
+                        html = markdown2.markdown(full_conversation, extras=["tables"])
+                        st.download_button('Download Followup Responses', html, f'followup_responses.html', 'text/html')
         
         if st.session_state.snippets:
             with st.sidebar:
