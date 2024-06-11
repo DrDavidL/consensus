@@ -535,7 +535,7 @@ def main():
                     st.write(st.session_state.source_chunks)
         
         if st.session_state.messages1:        
-            if st.checkbox("Ask a Followup Question"):
+            if st.checkbox("Ask an AI Persona a Followup Question - (Start over at the top if current Internet content is needed.)"):
                 expert_chosen = st.selectbox("Choose an expert to ask a followup question:", st.session_state.experts)
                 experts = st.session_state.experts
                 if experts:
