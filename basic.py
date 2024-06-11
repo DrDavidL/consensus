@@ -434,7 +434,7 @@ def main():
                         current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
                         # Update the query to include the current date and time
-                        answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}",
+                        answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible. If math required, invoke a python interpreter for calculations. User query: {original_query}",
                             config=config,
                             citations=True
                         )                                                                                        
