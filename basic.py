@@ -429,8 +429,16 @@ def main():
                 llm_config = app.llm.config.as_dict()  
                 config = BaseLlmConfig(**llm_config) 
                 with st.spinner('Analyzing retrieved content...'):
-                    try:                                                                                        
-                        answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)                                               
+                    try:
+                        # Get the current date and time
+                        current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+                        # Update the query to include the current date and time
+                        answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}",
+                            config=config,
+                            citations=True
+                        )                                                                                        
+                        # answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)                                               
                     except Exception as e:   
                         st.error(f"Error during app query: {e}")                                                                   
     
