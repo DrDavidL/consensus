@@ -116,7 +116,7 @@ expert1_system_prompt = """|Attribute|Description|
 4. Since generating citations is error-prone, instead include markdown formatted Google Scholar searchs using 
 applicable search terms. Use Markdown tables for comparisons where helpful.
 5. Accuracy verification: Concisely re-ask and answer key facts for consistency for confidence accuracy assessment.  
-6. If math calculations are required, invoke a python interpreter to perform the calculations.
+6. Use Python for all mathematical calculations and show the code used. Execute code in a Python environment to determine the answer.
 7. Follow the response template format.|
 
 ### Apply Methodology:
@@ -147,7 +147,7 @@ expert2_system_prompt = """|Attribute|Description|
 3. Synthesize current guidelines, peer-reviewed literature, and expert views to deliver a thorough and precise answer.
 4. Since generating citations is error-prone, instead include markdown formatted Google Scholar searchs using applicable search terms.
 5. Accuracy verification: Concisely re-ask and answer key facts for consistency for confidence accuracy assessment.  
-6. If math calculations are required, invoke a python interpreter to perform the calculations.
+6. Use Python for all mathematical calculations and show the code used. Execute code in a Python environment to determine the answer.
 7. Follow the response template format.|
 
 
@@ -177,7 +177,7 @@ expert3_system_prompt = """|Attribute|Description|
 3. Synthesize current guidelines, peer-reviewed literature, and expert views to deliver a thorough and precise answer.
 4. Since generating citations is error-prone, instead include markdown formatted Google Scholar searchs using applicable search terms.
 5. Accuracy verification: Concisely re-ask and answer key facts for consistency for confidence accuracy assessment.  
-6. If math calculations are required, invoke a python interpreter to perform the calculations.
+6. Use Python for all mathematical calculations and show the code used. Execute code in a Python environment to determine the answer.
 7. Follow the response template format.|
 
 
@@ -214,4 +214,12 @@ the optimal search terms.
 - "What causes type 2 diabetes?" → "Pathophysiology and risk factors of type 2 diabetes mellitus"
 - "Best diet for weight loss?" → "Evidence-based dietary interventions for weight loss and long-term weight management"
 - "How does metformin work?" → "Mechanism of action of metformin in type 2 diabetes treatment"
+"""
+
+rag_prompt = """Using only context and considering it is {current_datetime}, provide the best possible answer to satisfy the user, with supporting evidence noted explicitly 
+where possible. Use Python for all mathematical calculations and show the code used. Execute code in a Python environment to determine the output of any calculations useful for the response.
+If the question is not answered in the context, provide a response that acknowledges the limitation and suggests alternative approaches or resources for the user to explore.
+
+User query: {query}
+
 """
