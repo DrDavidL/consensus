@@ -37,7 +37,7 @@ def replace_first_user_message(messages, new_message):
 def realtime_search(query, domains, max, start_year=2020):
     url = "https://real-time-web-search.p.rapidapi.com/search"
     full_query = f"{query} AND ({domains})"
-    st.write(f'Full Query: {full_query}')
+    # st.write(f'Full Query: {full_query}')
     
     # Define the start date and the current date
     start_date = f"{start_year}-01-01"
@@ -391,6 +391,8 @@ def main():
         
         if st.button('Begin Research'):
             st.divider()
+            app.reset()
+            app.reset()
             app.reset()
             
             if restrict_domains != "No Internet":
