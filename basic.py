@@ -36,7 +36,8 @@ def replace_first_user_message(messages, new_message):
 
 def realtime_search(query, domains, max, start_year=2020):
     url = "https://real-time-web-search.p.rapidapi.com/search"
-    full_query = f"{domains} {query}"
+    full_query = f"{query} AND ({domains})"
+    st.write(f'Full Query: {full_query}')
     
     # Define the start date and the current date
     start_date = f"{start_year}-01-01"
@@ -349,15 +350,25 @@ def main():
         
 
         # Define the domain strings
-        medical_domains = """site:www.nih.gov OR site:www.ncbi.nlm.nih.gov/books OR site:www.cdc.gov OR site:www.who.int OR site:www.pubmed.gov OR site:www.cochranelibrary.com OR 
-        site:www.uptodate.com OR site:www.medscape.com OR site:www.ama-assn.org OR site:www.nejm.org OR 
-        site:www.bmj.com OR site:www.thelancet.com OR site:www.jamanetwork.com OR site:www.mayoclinic.org OR site:www.acpjournals.org OR 
-        site:www.cell.com OR site:www.nature.com OR site:www.springer.com OR site:www.wiley.com OR site:www.ahrq.gov OR site:www.edu"""
+        medical_domains = """site:www.nih.gov OR site:www.ncbi.nlm.nih.gov/books OR site:www.cdc.gov OR site:www.who.int OR site:www.pubmed.gov OR site:www.cochranelibrary.com OR
+        site:www.uptodate.com OR site:www.medscape.com OR site:www.ama-assn.org OR site:www.nejm.org OR
+        site:www.bmj.com OR site:www.thelancet.com OR site:www.jamanetwork.com OR site:www.mayoclinic.org OR site:www.acpjournals.org OR
+        site:www.cell.com OR site:www.nature.com OR site:www.springer.com OR site:www.wiley.com OR site:www.ahrq.gov OR site:www.nccn.org/guidelines/category_1 OR
+        site:www.healthline.com OR site:www.medicalnewstoday.com OR site:www.webmd.com OR site:emedicine.medscape.com OR
+        site:www.niddk.nih.gov OR site:kff.org OR site:academic.oup.com OR site:www.sciencedirect.com OR
+        site:www.fda.gov OR site:www.ema.europa.eu OR site:clinicaltrials.gov OR site:drugs.com OR
+        site:www.merckmanuals.com OR site:health.harvard.edu OR site:stanfordhealthcare.org OR site:clevelandclinic.org OR
+        site:my.clevelandclinic.org"""
 
-        reliable_domains = """site:www.cnn.com OR site:www.bbc.com OR site:www.npr.org OR site:www.reuters.com OR site:www.theguardian.com OR 
-        site:www.nytimes.com OR site:www.washingtonpost.com OR site:www.nbcnews.com OR site:www.cbsnews.com OR site:www.abcnews.go.com OR 
-        site:www.apnews.com OR site:www.bloomberg.com OR site:www.forbes.com OR site:www.nationalgeographic.com OR site:www.scientificamerican.com OR 
-        site:www.nature.com OR site:www.newscientist.com OR site:www.smithsonianmag.com OR site:www.wikipedia.org OR site:www.history.com"""
+        reliable_domains = """site:www.cnn.com OR site:www.bbc.com OR site:www.npr.org OR site:www.reuters.com OR site:www.theguardian.com OR
+        site:www.nytimes.com OR site:www.washingtonpost.com OR site:www.nbcnews.com OR site:www.cbsnews.com OR site:www.abcnews.go.com OR
+        site:www.apnews.com OR site:www.bloomberg.com OR site:www.forbes.com OR site:www.nationalgeographic.com OR site:www.scientificamerican.com OR
+        site:www.nature.com OR site:www.newscientist.com OR site:www.smithsonianmag.com OR site:www.wikipedia.org OR site:www.history.com OR
+        site:www.britannica.com OR site:www.theatlantic.com OR site:www.vox.com OR site:www.propublica.org OR site:www.economist.com OR
+        site:www.pbs.org OR site:www.nature.org OR site:www.academic.oup.com OR site:www.ted.com OR site:www.nasa.gov OR site:arxiv.org OR
+        site:www.jstor.org OR site:scholar.google.com OR site:www.mit.edu OR site:www.stanford.edu OR site:www.harvard.edu OR
+        site:www.yale.edu OR site:www.princeton.edu OR
+        site:www.asahi.com OR site:www.ft.com OR site:www.wsj.com"""
 
         # Add radio buttons for domain selection
         restrict_domains = st.radio("Restrict Internet search domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True)
@@ -414,7 +425,7 @@ def main():
                 config = BaseLlmConfig(**llm_config) 
                 with st.spinner('Analyzing retrieved content...'):
                     try:                                                                                        
-                        answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {google_search_terms}", config=config, citations=True)                                               
+                        answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)                                               
                     except Exception as e:   
                         st.error(f"Error during app query: {e}")                                                                   
     
