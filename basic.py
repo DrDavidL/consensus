@@ -399,9 +399,9 @@ def main():
             app.reset()
             
             if restrict_domains != "No Internet":
-            
+                current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 search_messages = [{'role': 'system', 'content': optimize_search_terms_system_prompt},
-                                    {'role': 'user', 'content': original_query}]    
+                                    {'role': 'user', 'content': f'considering it is {current_datetime}, {original_query}'}]    
                 response_google_search_terms = create_chat_completion(search_messages, temperature=0.3, )
                 google_search_terms = response_google_search_terms.choices[0].message.content
                 with st.spinner(f'Searching for "{google_search_terms}"...'):
