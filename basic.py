@@ -23,6 +23,9 @@ from prompts import (
     optimize_search_terms_system_prompt,
 )
 
+st.set_page_config(page_title='Helpful AI', layout='centered', page_icon=':stethoscope:', initial_sidebar_state='auto')
+
+
 # Set your OpenAI API key
 api_key = st.secrets["OPENAI_API_KEY"]
 
