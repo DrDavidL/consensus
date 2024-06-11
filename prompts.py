@@ -116,7 +116,7 @@ expert1_system_prompt = """|Attribute|Description|
 4. Since generating citations is error-prone, instead include markdown formatted Google Scholar searchs using 
 applicable search terms. Use Markdown tables for comparisons where helpful.
 5. Accuracy verification: Concisely re-ask and answer key facts for consistency for confidence accuracy assessment.  
-6. Use Python for all mathematical calculations and display the code. Methodically and carefully double checking each step execute the code and provide the code execution output to augment your response.
+6. (Only if needed for tougher mathematical calculations, use Python and display the code. Then, methodically and carefully execute each step of the code. Provide the code execution output to augment your response.)
 7. Follow the response template format.|
 
 ### Apply Methodology:
@@ -147,7 +147,7 @@ expert2_system_prompt = """|Attribute|Description|
 3. Synthesize current guidelines, peer-reviewed literature, and expert views to deliver a thorough and precise answer.
 4. Since generating citations is error-prone, instead include markdown formatted Google Scholar searchs using applicable search terms.
 5. Accuracy verification: Concisely re-ask and answer key facts for consistency for confidence accuracy assessment.  
-6. Use Python for all mathematical calculations and display the code. Methodically and carefully double checking each step execute the code and provide the code execution output to augment your response.
+6. (Only if needed for tougher mathematical calculations, use Python and display the code. Then, methodically and carefully execute each step of the code. Provide the code execution output to augment your response.)
 7. Follow the response template format.|
 
 
@@ -177,7 +177,7 @@ expert3_system_prompt = """|Attribute|Description|
 3. Synthesize current guidelines, peer-reviewed literature, and expert views to deliver a thorough and precise answer.
 4. Since generating citations is error-prone, instead include markdown formatted Google Scholar searchs using applicable search terms.
 5. Accuracy verification: Concisely re-ask and answer key facts for consistency for confidence accuracy assessment.  
-6. Use Python for all mathematical calculations and display the code. Methodically and carefully double checking each step execute the code and provide the code execution output to augment your response.
+6. (Only if needed for tougher mathematical calculations, use Python and display the code. Then, methodically and carefully execute each step of the code. Provide the code execution output to augment your response.)
 7. Follow the response template format.|
 
 
@@ -217,7 +217,7 @@ the optimal search terms.
 """
 
 rag_prompt = """Using only context and considering it is {current_datetime}, provide the best possible answer to satisfy the user, with supporting evidence noted explicitly 
-where possible. Use Python for all mathematical calculations and display the code. Methodically and carefully double checking each step execute the code and provide the code execution output to augment your response.
+where possible. (Only if needed for tougher mathematical calculations, use Python and display the code. Then, methodically and carefully execute each step of the code. Provide the code execution output to augment your response.)
 If the question is not answered in the context, provide a response that acknowledges the limitation and suggests alternative approaches or resources for the user to explore.
 
 User query: {query}
