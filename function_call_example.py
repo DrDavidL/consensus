@@ -1,25 +1,17 @@
 import streamlit as st
 import sys
-
 import json
 import requests
-from datetime import datetime
-
 import ast
 import inspect
-
-import openai
-# from openai.error import RateLimitError
+from openai import OpenAI
 import os
 import time
 import re as regex
+from datetime import datetime
 from time import sleep
-from sympy import sympify, symbols, solve, primerange
-import re as regex
-import sympy as sp
-from sympy import *
-# from sympy import sympify, solve, symbols
 from random import randint
+from sympy import sympify, symbols, solve, primerange
 
 st.set_page_config(page_title='Problem Solver', layout = 'centered', page_icon = ':face_palm:', initial_sidebar_state = 'auto')
 
@@ -39,6 +31,8 @@ default_values = {
 for key, value in default_values.items():
     if key not in st.session_state:
         st.session_state[key] = value
+
+client = OpenAI(api_key=st.session_state.openai_api_key)
 
 def check_password():
 
@@ -160,17 +154,14 @@ def function_info(func):
     return FunctionWrapper(func)
 
 
-def gen_response(prefix, history, model):
+def gen_response(prefix, history, model="gpt-4o"):
     history.append({"role": "system", "content": prefix})
     sleep(1)
-    response = openai.ChatCompletion.create(
-        model=st.session_state.model,
+    response = client.chat.completions.create(
+        model=model,
         messages = history,
-        temperature=0.9,
+        temperature=0.3,
     )
-    # summary = response['choices'][0]['message']['content']
-    # st.session_state.message_history.append(summary)
-    # st.write(f'Here is the input summary: {summary}')
     return response
 
 
@@ -184,7 +175,7 @@ def access_gpt4(message_history, max_retries=10):
     
     for _ in range(max_retries):
         try:
-            response = openai.ChatCompletion.create(
+            response = client.chat.completions.create(
                 model=st.session_state.model,
                 messages=message_history,
                     functions=[func.function() for func in available_functions],
@@ -212,36 +203,22 @@ def controller2(query=st.session_state.query):
     done_phrase = 'Now we are done.'
     # Add the fresh new user message to the history
     st.session_state.message_history.append({"role": "user", "content": query})
-    openai.api_key = st.session_state.openai_api_key
     i = st.session_state.iteration_limit
     while not st.session_state.done and i > 0:
         i -= 1
-        # Check if message_history is not empty ensuring not a blank submission
-        # First pass through the model
-        # if query:
-        #     if st.session_state.with_fn_output == False:
-        #             response = access_gpt4(st.session_state.message_history)
-                    
-        #     else:
-        #             # response = access_gpt4(st.session_state.step2_message)
-        #             response = access_gpt4(st.session_state.message_history)
+
         sleep(1)            
         if query:
             sleep(1)
             response = access_gpt4(st.session_state.message_history)
                     
 
-
-        # Print the full response for troublshooting
-        # st.write(f' Here is the full initial response: {response}')
-
-        # Get the first response from the model; print for troublehooting
-        message = response["choices"][0]["message"]
+        message = response.choices[0].message
         # st.write(f'Here is the entire response: {response}')
         # st.write(f'Here is the first message, choices, 0, message, from the response: {message}')   
         
         # Here is the content of that first message.
-        answer_content = message["content"]
+        answer_content = message.content
         st.markdown(f'**Problem Solver:** {answer_content}')
         
         if answer_content is not None:    
@@ -258,9 +235,10 @@ def controller2(query=st.session_state.query):
         st.session_state.message_history.append(message)
         # Step 2, check if the model wants to call a function
         
-        if message.get("function_call"):
+        # if message.get("function_call"):
+        if message.function_call:
             st.session_state.with_fn_output = True
-            function_name = message["function_call"]["name"]
+            function_name = message.function_call.name
             st.markdown(f'*Making a function call:* **{function_name}**')
             
 
@@ -275,7 +253,7 @@ def controller2(query=st.session_state.query):
             function_info = function_function.function()
 
             # Extract function call arguments from the message
-            function_call_args = json.loads(message["function_call"]["arguments"])
+            function_call_args = json.loads(message.function_call.arguments)
 
             # Filter function call arguments based on available properties
             filtered_args = {}
@@ -337,7 +315,6 @@ def controller(query=st.session_state.query):
 
     # Add the fresh new user message to the history
     st.session_state.message_history.append({"role": "user", "content": query})
-    openai.api_key = st.session_state.openai_api_key
     i = st.session_state.iteration_limit
     while not st.session_state.done and i > 0:
         i -= 1
@@ -350,12 +327,12 @@ def controller(query=st.session_state.query):
         # st.write(f' Here is the full initial response: {response}')
 
         # Get the first response from the model; print for troublehooting
-        message = response["choices"][0]["message"]
+        message = response.choices[0].message
         # st.write(f'Here is the entire response: {response}')
         # st.write(f'Here is the first message, choices, 0, message, from the response: {message}')   
         
         # Here is the content of that first message.
-        first_answer = message["content"]
+        first_answer = message.content
         st.markdown(f'**Problem Solver:** {first_answer}')
         
         if first_answer is not None:    
@@ -373,7 +350,7 @@ def controller(query=st.session_state.query):
         # Step 2, check if the model wants to call a function
         
         if message.get("function_call"):
-            function_name = message["function_call"]["name"]
+            function_name = message.function_call.name
             st.markdown(f'*Making a function call:* **{function_name}**')
 
             function_function = globals().get(function_name)
@@ -418,9 +395,9 @@ def controller(query=st.session_state.query):
             # Step 4, send model the info on the function call and function response
             
             # st.write(f'here is the second response message after analyzing function output: {second_response}')
-            message2 = second_response["choices"][0]["message"]
+            message2 = second_response.choices[0].message
             st.session_state.message_history.append(message2)
-            second_answer = message2["content"]
+            second_answer = message2.content
             st.write(second_answer)
             if second_answer is not None:
                 if done_phrase in second_answer:
@@ -609,15 +586,25 @@ if check_password():
     # conversation_text = '\n'.join([f"{message['role']}: {message['content']} \n" for message in st.session_state.message_history if message['content'] is not None and message['content'].lower() != 'none'])
     conversation_text = ''
     for message in st.session_state.message_history:
-        if message['content'] is not None and message['content'].lower() != 'none':
+        # st.write(f'Here is the message: {message}')
+        if isinstance(message, dict):
+            content = message.get('content', '').strip()
+            role = message.get('role', 'unknown')
+        else:
+            content = message.content.strip() if message.content else ''
+            role = message.role if message.role else 'unknown'
+        
+        if content and content.lower() != 'none':
             # If the keyword is in the message content, split the content at the keyword
-            if "Use the 'calculate_expression' function call" in message['content']:
-                parts = message['content'].split("Use the 'calculate_expression' function call", 1)
-                content = parts[0]
-            else:
-                content = message['content']
+            if "Use the 'calculate_expression' function call" in content:
+                parts = content.split("Use the 'calculate_expression' function call", 1)
+                content = parts[0].strip()
             # Add the content (or the part before the keyword) to the conversation text
-            conversation_text += f"{message['role']}: {content} \n\n"
+            conversation_text += f"{role}: {content} \n\n"
+
+
+
+
 
 
 
@@ -648,7 +635,7 @@ if check_password():
             # Summarize the message history
             summary_prefix = "Following this prompt is a text history of our conversation. Generate a summary of this message history: "
             summarized_history = gen_response(summary_prefix, st.session_state.message_history, st.session_state.model)
-            summary = summarized_history['choices'][0]['message']['content']
+            summary = summarized_history.choices[0].message.content
             # st.write(f'Thread is being summarized as follows: {summary}. Full details are still available for downloading.')
             # Keep the most recent 5 messages intact
             recent_messages = st.session_state.message_history[-5:]
