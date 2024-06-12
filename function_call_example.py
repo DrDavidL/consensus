@@ -23,32 +23,22 @@ from random import randint
 
 st.set_page_config(page_title='Problem Solver', layout = 'centered', page_icon = ':face_palm:', initial_sidebar_state = 'auto')
 
-if "model" not in st.session_state:
-    st.session_state.model = "gpt-3.5-turbo-16k"
+# Initialize session state variables with default values if they don't exist
+default_values = {
+    "model": "gpt-3.5-turbo-16k",
+    "openai_api_key": '',
+    "message_history": [],
+    "query": '',
+    "iteration_limit": 5,
+    "last_result": "",
+    "done": False,
+    "step2_message": '',
+    "with_fn_output": False
+}
 
-if "openai_api_key" not in st.session_state:
-    st.session_state.openai_api_key = ''
-    
-if 'message_history' not in st.session_state:
-    st.session_state.message_history = []
-    
-if 'query' not in st.session_state:
-    st.session_state.query = ''
-    
-if 'iteration_limit' not in st.session_state:
-    st.session_state.iteration_limit = 5
-    
-if "last_result" not in st.session_state:
-    st.session_state.last_result = ""
-    
-if "done" not in st.session_state:
-    st.session_state.done = False
-    
-if "step2_message" not in st.session_state:
-    st.session_state.step2_message = ''
-    
-if 'with_fn_output' not in st.session_state:
-    st.session_state.with_fn_output = False
+for key, value in default_values.items():
+    if key not in st.session_state:
+        st.session_state[key] = value
 
 def check_password():
 
