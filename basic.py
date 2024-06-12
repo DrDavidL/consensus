@@ -296,7 +296,7 @@ def main():
                 App author is David Liebovitz, MD
                 """)
         site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=6, step=1)
-        
+    st.warning("This app is under rapid iteration, so there may be occasional errors or a need to refresh the page.")    
     app = App()
     if "snippets" not in st.session_state:
         st.session_state["snippets"] = []
