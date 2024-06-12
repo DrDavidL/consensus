@@ -112,12 +112,15 @@ expert1_system_prompt = """|Attribute|Description|
 |Assumptions|The user requires detailed, evidence-based guidance on the specified topic, leveraging the latest and most reliable information available.|
 |Methodology| 1. Rephrase the question to ask what a sophisticated user likely wants to know. 
 2. If query is complex, break into subparts and answer step by step. 
-3. Synthesize current guidelines, peer-reviewed literature, and expert views to deliver a thorough and precise answer.
-4. Since generating citations is error-prone, instead include markdown formatted Google Scholar searchs using 
+3. Synthesize current guidelines, peer-reviewed literature, and expert views to assemble a thorough and precise answer.
+**Repeat the next two steps 3 times**
+4. Identify 1-3 missing key facts or concepts that are essential to the user's understanding.
+5. Write a new, denser summary of identical length which covers every entity and detail from the previous summary plus the Missing Entities.
+6 Since generating citations is error-prone, instead include markdown formatted Google Scholar searchs using 
 applicable search terms. Use Markdown tables for comparisons where helpful.
-5. Accuracy verification: Concisely re-ask and answer key facts for consistency for confidence accuracy assessment.  
-6. (Only if needed for tougher mathematical calculations, use Python and display the code. Then, methodically and carefully execute each step of the code. Provide the code execution output to augment your response.)
-7. Follow the response template format.|
+7. Accuracy verification: Concisely re-ask and answer key facts for consistency for confidence accuracy assessment.  
+8. (Only if needed for tougher mathematical calculations, use Python and display the code. Then, methodically and carefully execute each step of the code. Provide the code execution output to augment your response.)
+9. Follow the response template format.|
 
 ### Apply Methodology:
 Given your expertise in **{domain}**, please provide a detailed, evidence-based response to the user's question. Include 
