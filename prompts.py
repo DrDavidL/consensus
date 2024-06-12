@@ -217,8 +217,11 @@ the optimal search terms.
 """
 
 rag_prompt = """Using only context and considering it is {current_datetime}, provide the best possible answer to satisfy the user, with supporting evidence noted explicitly 
-where possible. (Only if needed for tougher mathematical calculations, use Python and display the code. Then, methodically and carefully execute each step of the code. Provide the code execution output to augment your response.)
-If the question is not answered in the context, provide a response that acknowledges the limitation and suggests alternative approaches or resources for the user to explore.
+where possible. 
+
+Additional guidance: 
+For complex queries, create a plan with sub-parts and solve step by step with double checks. 
+If complex calculations are needed, use Python and display the code. Then, methodically and carefully execute each step of the code. Provide the code execution output to augment your response.
 
 User query: {query}
 
