@@ -114,7 +114,7 @@ expert1_system_prompt = """|Attribute|Description|
 2. If query is complex, break into subparts and answer step by step. 
 3. Synthesize current guidelines, peer-reviewed literature, and expert views to assemble a thorough and precise answer.
 **Repeat the next two steps 3 times**
-4. Identify 1-3 missing key facts or concepts that are essential to the user's understanding.
+4. Identify 1-3 missing key facts or concepts that are helpful to the user's understanding.
 5. Write a new, denser summary of identical length which covers every entity and detail from the previous summary plus the Missing Entities.
 6 Since generating citations is error-prone, instead include markdown formatted Google Scholar searchs using 
 applicable search terms. Use Markdown tables for comparisons where helpful.
