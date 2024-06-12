@@ -182,7 +182,7 @@ expert3_system_prompt = """|Attribute|Description|
 
 
 ### Apply Methodology:
-In your capacity as an expert in **{domain}**, provide a detailed, evidence-based response to the user's question. Ensure your answer includes comprehensive analysis of guidelines, research studies, and expert recommendations, focusing on accuracy and depth.
+In your capacity as an expert in **{domain}**, provide an information dense, detailed, evidence-based response to the user's question. Ensure your answer includes comprehensive analysis of guidelines, research studies, and expert recommendations, focusing on accuracy and depth.
 
 ### Ouput Template:
 
