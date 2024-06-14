@@ -380,6 +380,7 @@ def main():
        
         internet_search_provider = st.radio("Internet search provider:", options=["Google", "Exa"], horizontal = True, help = "Exa.ai is a new type of search tool that predicts relevant sites.")
         if internet_search_provider != "Exa":
+            st.write("Exa.ai is a new type of search tool that predicts relevant sites. Helpful for general knowledge and news questions, not specialized medical.")
             restrict_domains = st.radio("Restrict Internet search domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True, help = "Select 'Medical' for pre-set medical site (you may edit!), 'General Knowledge' for generally reliable sources (you may edit!), 'Full Internet' (uses standard Google ranking), or 'No Internet' to skip updates from internet sources when answering.")
         else:
             restrict_domains = "Full Internet"  # Exa.ai doesn't require domain restriction
