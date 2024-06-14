@@ -2,12 +2,13 @@ import asyncio
 import json
 import re
 import tempfile
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import aiohttp
 import requests
 import streamlit as st
 from openai import OpenAI
+from exa_py import Exa
 import markdown2
 
 
@@ -27,8 +28,9 @@ from prompts import (
 st.set_page_config(page_title='Helpful AI', layout='centered', page_icon=':stethoscope:', initial_sidebar_state='auto')
 
 
-# Set your OpenAI API key
+# Set your API keys
 api_key = st.secrets["OPENAI_API_KEY"]
+exa = Exa(st.secrets["EXA_API_KEY"])  # Exa.ai API key
 
 # Function to replace the first user message
 def replace_first_user_message(messages, new_message):
@@ -375,24 +377,29 @@ def main():
         site:www.asahi.com OR site:www.ft.com OR site:www.wsj.com"""
 
         # Add radio buttons for domain selection
-        restrict_domains = st.radio("Restrict Internet search domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True, help = "Select 'Medical' for pre-set medical site (you may edit!), 'General Knowledge' for generally reliable sources (you may edit!), 'Full Internet' (uses standard Google ranking), or 'No Internet' to skip updates from internet sources when answering.")
-
-        # Update the `domains` variable based on the selection
-        if restrict_domains == "Medical":
-            domains = medical_domains
-        elif restrict_domains == "General Knowledge":
-            domains = reliable_domains
+       
+        internet_search_provider = st.radio("Internet search provider:", options=["Google", "Exa"], horizontal = True, help = "Exa.ai is a new type of search tool that predicts relevant sites.")
+        if internet_search_provider != "Exa":
+            restrict_domains = st.radio("Restrict Internet search domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True, help = "Select 'Medical' for pre-set medical site (you may edit!), 'General Knowledge' for generally reliable sources (you may edit!), 'Full Internet' (uses standard Google ranking), or 'No Internet' to skip updates from internet sources when answering.")
         else:
-            domains = ""  # Full Internet option doesn't restrict domains
-
-        # Checkbox to reveal and edit domains
-        if restrict_domains != "No Internet" and restrict_domains != "Full Internet":
-            edit_domains = st.checkbox("Reveal and Edit Selected Domains", help = "Check to edit the webstie domains included in the Internet search.")
-
-            # Display the selected domains in a text area if the checkbox is checked
-            if edit_domains:
-                domains = st.text_area("Edit domains (maintain format pattern):", domains, height=200)
+            restrict_domains = "Full Internet"  # Exa.ai doesn't require domain restriction
         
+        # Update the `domains` variable based on the selection
+            if restrict_domains == "Medical":
+                domains = medical_domains
+            elif restrict_domains == "General Knowledge":
+                domains = reliable_domains
+            else:
+                domains = ""  # Full Internet option doesn't restrict domains
+
+            # Checkbox to reveal and edit domains
+            if restrict_domains != "No Internet" and restrict_domains != "Full Internet":
+                edit_domains = st.checkbox("Reveal and Edit Selected Domains", help = "Check to edit the webstie domains included in the Internet search.")
+
+                # Display the selected domains in a text area if the checkbox is checked
+                if edit_domains:
+                    domains = st.text_area("Edit domains (maintain format pattern):", domains, height=200)
+            
         if st.button('Begin Research'):
             st.divider()
             app.reset()
@@ -406,7 +413,16 @@ def main():
                 response_google_search_terms = create_chat_completion(search_messages, temperature=0.3, )
                 google_search_terms = response_google_search_terms.choices[0].message.content
                 with st.spinner(f'Searching for "{google_search_terms}"...'):
-                    st.session_state.snippets, st.session_state.urls = realtime_search(google_search_terms, domains, site_number)
+                    if internet_search_provider == "Google":
+                        st.session_state.snippets, st.session_state.urls = realtime_search(google_search_terms, domains, site_number)
+                    else:
+                        three_years_ago = datetime.now() - timedelta(days=3 * 365.25)
+                        date_cutoff = three_years_ago.strftime("%Y-%m-%d")
+                        search_response = exa.search_and_contents(google_search_terms, text={"include_html_tags": False, "max_characters": 1000}, 
+                                    highlights={"highlights_per_url": 2, "num_sentences": 5, "query": "This is the highlight query:"}, start_published_date=date_cutoff)
+                        st.session_state.snippets =[result.text for result in search_response.results]
+                        st.session_state.urls = [result.url for result in search_response.results]
+        
                 
                 # Initialize a list to store blocked sites
                 blocked_sites = []
