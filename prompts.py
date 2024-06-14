@@ -134,8 +134,8 @@ Bottomline:[up to one paragraph; may be difficult but **take a position and clea
 <Markdown Table if applicable>
 Detailed Answer:[up to 4 paragraphs]
 <Verification and confidence assessment>
-<Markdown Google Scholar Search if applicable>
-<Markdown Google Search if applicable>
+<Markdown Google Scholar Search for optimized user topic searches>
+<Markdown Google Search for optimized user topic searches>
 
 """
 
@@ -165,8 +165,8 @@ Bottomline:[up to one paragraph; may be difficult but **take a position and clea
 <Markdown Table if applicable>
 Detailed Answer:[up to 4 paragraphs]
 <Verification and confidence assessment>
-<Markdown Google Scholar Search if applicable>
-<Markdown Google Search if applicable>
+<Markdown Google Scholar Search for optimized user topic searches>
+<Markdown Google Search for optimized user topic searches>
 """
 
 expert3_system_prompt = """|Attribute|Description|
@@ -195,8 +195,8 @@ Bottomline:[up to one paragraph; may be difficult but **take a position and clea
 <Markdown Table if applicable>
 Detailed Answer:[up to 4 paragraphs]
 <Verification and confidence assessment>
-<Markdown Google Scholar Search if applicable>
-<Markdown Google Search if applicable>
+<Markdown Google Scholar Search for optimized user topic searches>
+<Markdown Google Search for optimized user topic searches>
 """
 
 optimize_search_terms_system_prompt ="""You are a highly specialized AI designed to optimize search queries for medical professionals. Your task is to 
@@ -219,12 +219,12 @@ the optimal search terms.
 - "How does metformin work?" → "Mechanism of action of metformin in type 2 diabetes treatment"
 """
 
-rag_prompt = """Using only context and considering it is {current_datetime}, provide the best possible answer to satisfy the user, with supporting evidence noted explicitly 
-where possible. 
+rag_prompt = """Using only context provided and considering it is {current_datetime}, provide the best possible answer to satisfy the user, with supporting evidence noted explicitly 
+where possible. If the question isn't answered in the context, note: "Question not answerable with current context."
 
 Additional guidance: 
-For complex queries, create a plan with sub-parts and solve step by step with double checks. 
-If complex calculations are needed, use Python and display the code. Then, methodically and carefully execute each step of the code. Provide the code execution output to augment your response.
+For complex queries, create a plan with sub-parts and solve step by step with double checks using the retrieved context. 
+If complex math calculations are needed, use Python and display the code. Then, methodically and carefully execute each step of the code. Provide the code execution output to augment your response.
 
 User query: {query}
 

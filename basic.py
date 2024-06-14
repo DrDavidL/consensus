@@ -108,7 +108,7 @@ def clean_text(text):
 def refine_output(data):
     with st.expander("Source Excerpts:"):
         all_sources = ""
-        for text, info in sorted(data, key=lambda x: x[1]['score'], reverse=True)[:3]:
+        for text, info in sorted(data, key=lambda x: x[1]['score'], reverse=True)[:8]:
             st.write(f"Score: {info['score']}\n")
             cleaned_text = clean_text(text)
             all_sources += cleaned_text
@@ -347,7 +347,7 @@ def main():
     if check_password():
     
         # Obtain the initial query from the user
-        original_query = st.text_input('Original Query', placeholder='Enter your question here...')
+        original_query = st.text_input('Original Query', placeholder='Enter your question here...', help = "Ask any knowledge-based question.")
         st.session_state.original_question = original_query
         find_experts_messages = [{'role': 'system', 'content': system_prompt_expert_questions}, 
                                 {'role': 'user', 'content': original_query}]
@@ -375,7 +375,7 @@ def main():
         site:www.asahi.com OR site:www.ft.com OR site:www.wsj.com"""
 
         # Add radio buttons for domain selection
-        restrict_domains = st.radio("Restrict Internet search domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True)
+        restrict_domains = st.radio("Restrict Internet search domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True, help = "Select 'Medical' for pre-set medical site (you may edit!), 'General Knowledge' for generally reliable sources (you may edit!), 'Full Internet' (uses standard Google ranking), or 'No Internet' to skip updates from internet sources when answering.")
 
         # Update the `domains` variable based on the selection
         if restrict_domains == "Medical":
@@ -386,8 +386,8 @@ def main():
             domains = ""  # Full Internet option doesn't restrict domains
 
         # Checkbox to reveal and edit domains
-        if restrict_domains != "No Internet":
-            edit_domains = st.checkbox("Reveal and Edit Selected Domains")
+        if restrict_domains != "No Internet" and restrict_domains != "Full Internet":
+            edit_domains = st.checkbox("Reveal and Edit Selected Domains", help = "Check to edit the webstie domains included in the Internet search.")
 
             # Display the selected domains in a text area if the checkbox is checked
             if edit_domains:
