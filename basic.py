@@ -381,10 +381,7 @@ def main():
         internet_search_provider = st.radio("Internet search provider:", options=["Google", "Exa"], horizontal = True, help = "Exa.ai is a new type of search tool that predicts relevant sites.")
         if internet_search_provider != "Exa":
             restrict_domains = st.radio("Restrict Internet search domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True, help = "Select 'Medical' for pre-set medical site (you may edit!), 'General Knowledge' for generally reliable sources (you may edit!), 'Full Internet' (uses standard Google ranking), or 'No Internet' to skip updates from internet sources when answering.")
-        else:
-            restrict_domains = "Full Internet"  # Exa.ai doesn't require domain restriction
-            st.info("Exa.ai is a new type of search tool that predicts relevant sites. Helpful for general knowledge, not for specialized medical or current events.")
-        
+
         # Update the `domains` variable based on the selection
             if restrict_domains == "Medical":
                 domains = medical_domains
@@ -400,6 +397,9 @@ def main():
                 # Display the selected domains in a text area if the checkbox is checked
                 if edit_domains:
                     domains = st.text_area("Edit domains (maintain format pattern):", domains, height=200)
+        else:
+            restrict_domains = "Full Internet"  # Exa.ai doesn't require domain restriction
+            st.info("Exa.ai is a new type of search tool that predicts relevant sites. Helpful for general knowledge, not for specialized medical or current events.")
             
         if st.button('Begin Research'):
             st.divider()
