@@ -377,10 +377,12 @@ def main():
         site:www.asahi.com OR site:www.ft.com OR site:www.wsj.com"""
 
         # Add radio buttons for domain selection
-       
-        internet_search_provider = st.radio("Internet search provider:", options=["Google", "Exa"], horizontal = True, help = "Exa.ai is a new type of search tool that predicts relevant sites.")
+        with st.sidebar:
+            with st.popover("Internet Search Options"):
+                internet_search_provider = st.radio("Internet search provider:", options=["Google", "Exa"], horizontal = True, help = "Only specific Google domains are used for retrieving current Medical or General Knowledge. Exa.ai is a new type of search tool that predicts relevant sites; domain filtering not yet added here.")
+        
         if internet_search_provider != "Exa":
-            restrict_domains = st.radio("Restrict Internet search domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True, help = "Select 'Medical' for pre-set medical site (you may edit!), 'General Knowledge' for generally reliable sources (you may edit!), 'Full Internet' (uses standard Google ranking), or 'No Internet' to skip updates from internet sources when answering.")
+            restrict_domains = st.radio("Restrict Internet search domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True, help = "Edit Google search domains on left sidebar. Select 'Medical' for pre-set medical site (you may edit!), 'General Knowledge' for generally reliable sources (you may edit!), 'Full Internet' (uses standard Google ranking), or 'No Internet' to skip updates to AI from internet sources when answering.")
 
         # Update the `domains` variable based on the selection
             if restrict_domains == "Medical":
@@ -392,14 +394,18 @@ def main():
 
             # Checkbox to reveal and edit domains
             if restrict_domains != "No Internet" and restrict_domains != "Full Internet":
-                edit_domains = st.checkbox("Reveal and Edit Selected Domains", help = "Check to edit the webstie domains included in the Internet search.")
+                # with st.sidebar:
+                #     with st.popover("Edit Domains"):
+                #         edit_domains = st.checkbox("Reveal and Edit Selected Domains", help = "Check to edit the webstie domains included in the Internet search.")
 
                 # Display the selected domains in a text area if the checkbox is checked
-                if edit_domains:
-                    domains = st.text_area("Edit domains (maintain format pattern):", domains, height=200)
+                with st.sidebar:
+                    with st.popover("Edit Search Domains"):
+                        domains = st.text_area("Edit domains (maintain format pattern):", domains, height=200)
         else:
             restrict_domains = "Full Internet"  # Exa.ai doesn't require domain restriction
-            st.info("Exa.ai is a new type of search tool that predicts relevant sites. Helpful for general knowledge, not for specialized medical or current events.")
+            # with st.sidebar:
+            #     st.info("Exa.ai is a new type of search tool that predicts relevant sites. Helpful for general knowledge, not for specialized medical or current events.")
             
         if st.button('Begin Research'):
             st.divider()
@@ -547,6 +553,8 @@ def main():
         
         if st.session_state.rag_response:            
             with st.sidebar:
+                st.divider()
+                st.info("Current Results")
                 with st.expander("Web Response and Sources"):
                     st.write(st.session_state.rag_response)
                     st.write(st.session_state.source_chunks)
