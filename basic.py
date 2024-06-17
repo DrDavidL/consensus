@@ -108,18 +108,19 @@ def clean_text(text):
     return text
 
 def refine_output(data):
-    with st.expander("Source Excerpts:"):
-        all_sources = ""
-        for text, info in sorted(data, key=lambda x: x[1]['score'], reverse=True)[:8]:
-            st.write(f"Score: {info['score']}\n")
-            cleaned_text = clean_text(text)
-            all_sources += cleaned_text
-            # if "Table" in cleaned_text:
-            #     st.write("Extracted Table:")
-            #     st.write(create_table_from_text(cleaned_text))  # Example of integrating table extraction
-            # else:
-            st.write("Text:\n", cleaned_text)
-            st.write("\n")
+    # with st.expander("Source Excerpts:"):
+    all_sources = ""
+    for text, info in sorted(data, key=lambda x: x[1]['score'], reverse=True)[:8]:
+        # st.write(f"Score: {info['score']}\n")
+        all_sources += f"Score: {info['score']}\n\n"
+        cleaned_text = clean_text(text) + "\n\n"
+        all_sources += cleaned_text
+        # if "Table" in cleaned_text:
+        #     st.write("Extracted Table:")
+        #     st.write(create_table_from_text(cleaned_text))  # Example of integrating table extraction
+        # else:
+        # st.write("Text:\n", cleaned_text)
+        # st.write("\n")
     return all_sources
 
 
@@ -481,17 +482,25 @@ def main():
                         sources.append(source)                                                              
                     sources = list(set(sources))                                                            
                     for source in sources:                                                                  
-                        full_response += f"- {source}\n"      
-                st.markdown(full_response)
-                
-                st.session_state.rag_response = full_response
+                        full_response += f"- {source}\n"
+                    st.session_state.rag_response = full_response
+                container1 = st.container(border=True)
+                # container1.markdown(st.session_state.rag_response)
+                              
                 st.session_state.source_chunks = refine_output(citations)
+                with container1:
+                    st.markdown(st.session_state.rag_response)
+                    with st.expander("View Source Excerpts"):
+                        st.markdown(st.session_state.source_chunks)
 
 
 
-            
-            
-            completion = create_chat_completion(messages=find_experts_messages, temperature=0.3, response_format="json_object")
+
+            try:            
+                completion = create_chat_completion(messages=find_experts_messages, temperature=0.3, response_format="json_object")
+            except Exception as e:
+                st.error(f"Error during OpenAI call: {e}")
+                return
             with st.sidebar:
                 with st.expander("AI Personas Identified"):
                     # st.write(f"**Response:**")
@@ -537,17 +546,26 @@ def main():
             with st.spinner('Waiting for experts to respond...'):
                 st.session_state.expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
 
+        # if st.session_state.rag_response:
+        #     with container1:
+        #         st.markdown(st.session_state.rag_response)
+        #         with st.expander("View Source Excerpts"):
+        #             st.markdown(st.session_state.source_chunks)
         if st.session_state.expert_answers:   
-            with st.expander(f'AI {st.session_state.experts[0]} Perspective'):
-                st.write(st.session_state.expert_answers[0]['choices'][0]['message']['content'])
-                st.session_state.messages1.append({"role": "assistant", "content": st.session_state.expert_answers[0]['choices'][0]['message']['content']})
-            with st.expander(f'AI {st.session_state.experts[1]} Perspective'):
-                st.write(st.session_state.expert_answers[1]['choices'][0]['message']['content'])
-                st.session_state.messages2.append({"role": "assistant", "content": st.session_state.expert_answers[1]['choices'][0]['message']['content']})
-            with st.expander(f'AI {st.session_state.experts[2]} Perspective'):
-                st.write(st.session_state.expert_answers[2]['choices'][0]['message']['content'])
-                st.session_state.messages3.append({"role": "assistant", "content": st.session_state.expert_answers[2]['choices'][0]['message']['content']})
-            
+            st.divider()
+            container2 = st.container(border=True)
+            with container2:
+                st.info("AI Expert Persona Responses")
+                with st.expander(f'AI {st.session_state.experts[0]} Perspective'):
+                    st.write(st.session_state.expert_answers[0]['choices'][0]['message']['content'])
+                    st.session_state.messages1.append({"role": "assistant", "content": st.session_state.expert_answers[0]['choices'][0]['message']['content']})
+                with st.expander(f'AI {st.session_state.experts[1]} Perspective'):
+                    st.write(st.session_state.expert_answers[1]['choices'][0]['message']['content'])
+                    st.session_state.messages2.append({"role": "assistant", "content": st.session_state.expert_answers[1]['choices'][0]['message']['content']})
+                with st.expander(f'AI {st.session_state.experts[2]} Perspective'):
+                    st.write(st.session_state.expert_answers[2]['choices'][0]['message']['content'])
+                    st.session_state.messages3.append({"role": "assistant", "content": st.session_state.expert_answers[2]['choices'][0]['message']['content']})
+                
 
 
         
@@ -560,7 +578,7 @@ def main():
                     st.write(st.session_state.source_chunks)
         
         if st.session_state.messages1:        
-            if st.checkbox("Ask an AI Persona a Followup Question - (Start over at the top if current Internet content is needed.)"):
+            if st.sidebar.checkbox("Ask an AI Persona a Followup Question - (Start over at the top if current Internet content is needed.)"):
                 expert_chosen = st.selectbox("Choose an expert to ask a followup question:", st.session_state.experts)
                 experts = st.session_state.experts
                 if experts:
