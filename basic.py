@@ -451,7 +451,7 @@ def main():
         site:www.niddk.nih.gov OR site:kff.org OR site:academic.oup.com OR site:www.sciencedirect.com OR
         site:www.fda.gov OR site:www.ema.europa.eu OR site:clinicaltrials.gov OR site:drugs.com OR
         site:www.merckmanuals.com OR site:health.harvard.edu OR site:stanfordhealthcare.org OR site:clevelandclinic.org OR
-        site:my.clevelandclinic.org"""
+        site:my.clevelandclinic.org OR site:arxiv.org"""
 
         reliable_domains = """site:www.cnn.com OR site:www.bbc.com OR site:www.npr.org OR site:www.reuters.com OR site:www.theguardian.com OR
         site:www.nytimes.com OR site:www.washingtonpost.com OR site:www.nbcnews.com OR site:www.cbsnews.com OR site:www.abcnews.go.com OR
@@ -461,7 +461,7 @@ def main():
         site:www.pbs.org OR site:www.nature.org OR site:www.academic.oup.com OR site:www.ted.com OR site:www.nasa.gov OR site:arxiv.org OR
         site:www.jstor.org OR site:scholar.google.com OR site:www.mit.edu OR site:www.stanford.edu OR site:www.harvard.edu OR
         site:www.yale.edu OR site:www.princeton.edu OR
-        site:www.asahi.com OR site:www.ft.com OR site:www.wsj.com"""
+        site:www.asahi.com OR site:www.ft.com OR site:www.wsj.com OR site:www.weather.com"""
 
         # Add radio buttons for domain selection
         with st.sidebar:
