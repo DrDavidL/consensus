@@ -384,7 +384,7 @@ def main():
                 and the [EmbedChain](https://embedchain.ai/) library. The LLM model is [GPT-4o](https://openai.com/index/hello-gpt-4o/) from OpenAI.
                 App author is David Liebovitz, MD
                 """)
-        site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=6, step=1)
+        site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=10, step=1)
     st.warning("This app is under rapid iteration, so there may be occasional errors or a need to refresh the page.")    
     app = App()
     if "snippets" not in st.session_state:
@@ -525,6 +525,7 @@ def main():
                             app.add(str(url), data_type='web_page')
                         with st.expander("PubMed Abstracts"):
                             st.write(f'PubMed search terms: {pubmed_search_terms}')
+                            st.write(f'Article Types (may change in left sidebar): {search_type}')
                             for article in articles:
                                 st.markdown(f"### [{article['title']}]({article['link']})")
                                 st.write(f"Year: {article['year']}")
