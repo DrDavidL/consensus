@@ -224,17 +224,37 @@ optimize_pubmed_search_terms_system_prompt = """You are a highly specialized AI 
 **Guidelines for Optimization:**
 
 - **Specify the condition or topic**: Include the medical condition or topic in precise terms, using both MeSH terms and text words. Example: ("hypertension"[MeSH Terms] OR "high blood pressure"[Text Word]).
-- **Use action words**: Incorporate words like "treatment", "causes", "guidelines", or "mechanism" to narrow the focus.
+- **Emphasize Consensus**: As shown in examples, emphasize terms like "systematic review", "meta-analysis", "guideline", "consensus", or "recommendation" to focus on high-quality evidence.
 - **Add context or population**: Mention the specific context or population if relevant. Example: "in adults", "in patients with hyperlipidemia".
 - **Only include essential terms**: Focus on the core concepts and avoid unnecessary words or phrases that will not contribute to the search results.
 
 **Examples:**
 
-- "Are statins helpful?" → ("statins"[MeSH Terms] OR "statins"[Text Word]) AND ("efficacy"[Text Word]) AND ("cardiovascular events"[MeSH Terms] OR "cardiovascular events"[Text Word]) AND ("LDL cholesterol"[MeSH Terms] OR "LDL cholesterol"[Text Word]) AND ("hyperlipidemia"[MeSH Terms] OR "hyperlipidemia"[Text Word])
-- "How to treat high blood pressure?" → ("hypertension"[MeSH Terms] OR "high blood pressure"[Text Word]) AND ("treatment guidelines"[Text Word]) AND ("antihypertensive agents"[MeSH Terms] OR "antihypertensive medications"[Text Word])
-- "What causes type 2 diabetes?" → ("diabetes mellitus, type 2"[MeSH Terms] OR "type 2 diabetes"[Text Word]) AND ("pathophysiology"[Text Word]) AND ("risk factors"[MeSH Terms] OR "risk factors"[Text Word])
-- "Best diet for weight loss?" → ("diet"[MeSH Terms] OR "dietary interventions"[Text Word]) AND ("weight loss"[MeSH Terms] OR "weight loss"[Text Word]) AND ("long-term weight management"[Text Word])
-- "How does metformin work?" → ("metformin"[MeSH Terms] OR "metformin"[Text Word]) AND ("mechanism of action"[Text Word]) AND ("diabetes mellitus, type 2"[MeSH Terms] OR "type 2 diabetes treatment"[Text Word])
+- "Are statins helpful?" → ((Hydroxymethylglutaryl-CoA Reductase Inhibitors[MeSH Terms] OR statins[Text Word] OR atorvastatin[Text Word] OR simvastatin[Text Word] OR rosuvastatin[Text Word])
+AND
+(efficacy[Text Word] OR effectiveness[Text Word] OR benefit[Text Word])
+AND
+(Cardiovascular Diseases[MeSH Terms] OR cardiovascular events[Text Word] OR Myocardial Infarction[MeSH Terms] OR myocardial infarction[Text Word] OR Stroke[MeSH Terms] OR stroke[Text Word] OR mortality[Text Word] OR coronary heart disease[Text Word])
+AND
+(Cholesterol, LDL[MeSH Terms] OR LDL cholesterol[Text Word] OR cholesterol[Text Word])
+AND
+(Hyperlipidemias[MeSH Terms] OR hyperlipidemia[Text Word] OR dyslipidemia[Text Word] OR hypercholesterolemia[Text Word])
+AND
+(review[Publication Type] OR systematic review[Text Word] OR meta-analysis[Text Word] OR guideline[Publication Type] OR practice guideline[Publication Type] OR consensus development conference[Publication Type] OR guidelines[Text Word] OR consensus[Text Word] OR recommendation[Text Word] OR position statement[Text Word]))
+
+- "Covid-19 treatment?" → ((COVID-19[MeSH Terms] OR COVID-19[Text Word] OR SARS-CoV-2[Text Word] OR coronavirus disease 2019[Text Word])
+AND
+(treatment[Text Word] OR therapy[Text Word] OR management[Text Word] OR drug therapy[MeSH Terms] OR antiviral[Text Word] OR immunotherapy[Text Word] OR supportive care[Text Word])
+AND
+(review[Publication Type] OR systematic review[Text Word] OR meta-analysis[Text Word] OR guideline[Publication Type] OR practice guideline[Publication Type] OR consensus development conference[Publication Type] OR guidelines[Text Word] OR consensus[Text Word] OR recommendation[Text Word] OR position statement[Text Word]))
+
+- "Should alendronate be held before tooth extraction?" → ((Alendronate[MeSH Terms] OR alendronate[Text Word] OR Diphosphonates[MeSH Terms] OR bisphosphonates[Text Word])
+AND
+(Tooth Extraction[MeSH Terms] OR tooth extraction[Text Word] OR dental extraction[Text Word])
+AND
+(hold[Text Word] OR discontinue[Text Word] OR cessation[Text Word] OR interruption[Text Word] OR drug holiday[Text Word])
+AND
+(review[Publication Type] OR systematic review[Text Word] OR meta-analysis[Text Word] OR guideline[Publication Type] OR practice guideline[Publication Type] OR consensus development conference[Publication Type] OR guidelines[Text Word] OR consensus[Text Word] OR recommendation[Text Word] OR position statement[Text Word]))
 """
 
 rag_prompt = """Using only context provided and considering it is {current_datetime}, provide the best possible answer to satisfy the user, with supporting evidence noted explicitly 

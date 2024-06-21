@@ -477,7 +477,8 @@ def main():
                 with st.sidebar:
                     with st.popover("PubMed Options"):
                         using_pubmed = st.checkbox("Include PubMed Abstracts", help = "Check to include PubMed in the search for medical content.", value = True)
-                        search_type = st.selectbox("Select search type:", ["all", "clinical trials", "reviews"], index=2)
+                        # search_type = st.selectbox("Select search type:", ["all", "clinical trials", "reviews"], index=0)
+                        search_type = "all"
                         max_results = st.number_input("Max results:", min_value=1, max_value=100, value=10)
                         years_back = st.number_input("Number of years back:", min_value=1, max_value=50, value=3)
             elif restrict_domains == "General Knowledge":
@@ -524,6 +525,7 @@ def main():
                         for url in urls:
                             app.add(str(url), data_type='web_page')
                         with st.expander("PubMed Abstracts"):
+                            st.warning("Note this is a focused PubMed search emphasizing consensus.")
                             st.write(f'PubMed search terms: {pubmed_search_terms}')
                             st.write(f'Article Types (may change in left sidebar): {search_type}')
                             for article in articles:
