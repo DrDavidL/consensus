@@ -41,7 +41,6 @@ def replace_first_user_message(messages, new_message):
             break
 
 def extract_abstract_from_xml(xml_data, pmid):
-    # Parse the XML data to find the abstract text for the given PubMed ID (pmid)
     root = ET.fromstring(xml_data)
     for article in root.findall(".//PubmedArticle"):
         medline_citation = article.find("MedlineCitation")
@@ -54,12 +53,10 @@ def extract_abstract_from_xml(xml_data, pmid):
                     abstract_text += ET.tostring(elem, encoding='unicode', method='text')
                 return abstract_text
     return "No abstract available"
-        
+
 def pubmed_abstracts(search_terms, search_type="all", max_results=5, years_back=3):
-    # URL encoding
     search_terms_encoded = requests.utils.quote(search_terms)
 
-    # Define the publication type filter based on the search_type parameter
     if search_type == "all":
         publication_type_filter = ""
     elif search_type == "clinical trials":
@@ -69,47 +66,41 @@ def pubmed_abstracts(search_terms, search_type="all", max_results=5, years_back=
     else:
         raise ValueError("Invalid search_type parameter. Use 'all', 'clinical trials', or 'reviews'.")
 
-    # Calculate the start date based on the number of years back
     current_year = datetime.now().year
     start_year = current_year - years_back
-
-    # Construct the search query with the publication type filter and date range
     search_query = f"{search_terms_encoded}{publication_type_filter}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
     
-    # Query to get the top results
     url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
+    
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Raise an exception for HTTP errors
+        response.raise_for_status()
         data = response.json()
         
-        # Check if no results were returned
         if 'count' in data['esearchresult'] and int(data['esearchresult']['count']) == 0:
             st.write("No results found. Try a different search or try again after re-loading the page.")
-            return []
+            return [], []
     except requests.exceptions.RequestException as e:
         st.error(f"Error fetching search results: {e}")
-        return []
+        return [], []
 
     ids = data['esearchresult']['idlist']
     if not ids:
         st.write("No results found.")
-        return []
+        return [], []
 
-    # Fetch details and abstracts for all IDs
     id_str = ",".join(ids)
     details_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={id_str}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
     abstracts_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={id_str}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
 
     articles = []
+    unique_urls = set()
 
     try:
-        # Fetch article details
         details_response = requests.get(details_url)
         details_response.raise_for_status()
         details_data = details_response.json()
         
-        # Fetch article abstracts
         abstracts_response = requests.get(abstracts_url)
         abstracts_response.raise_for_status()
         abstracts_data = abstracts_response.text
@@ -120,18 +111,20 @@ def pubmed_abstracts(search_terms, search_type="all", max_results=5, years_back=
                 year = article['pubdate'].split(" ")[0]
                 if year.isdigit():
                     abstract = extract_abstract_from_xml(abstracts_data, id)
+                    article_url = f"https://pubmed.ncbi.nlm.nih.gov/{id}"
                     articles.append({
                         'title': article['title'],
                         'year': year,
-                        'link': f"https://pubmed.ncbi.nlm.nih.gov/{id}",
+                        'link': article_url,
                         'abstract': abstract.strip() if abstract.strip() else "No abstract available"
                     })
+                    unique_urls.add(article_url)
             else:
                 st.warning(f"Details not available for ID {id}")
     except requests.exceptions.RequestException as e:
         st.error(f"Error fetching details or abstracts: {e}")
 
-    return articles
+    return articles, list(unique_urls)
 
 def realtime_search(query, domains, max, start_year=2020):
     url = "https://real-time-web-search.p.rapidapi.com/search"
@@ -484,8 +477,8 @@ def main():
                 with st.sidebar:
                     with st.popover("PubMed Options"):
                         using_pubmed = st.checkbox("Include PubMed Abstracts", help = "Check to include PubMed in the search for medical content.", value = True)
-                        search_type = st.selectbox("Select search type:", ["all", "clinical trials", "reviews"])
-                        max_results = st.number_input("Max results:", min_value=1, max_value=100, value=5)
+                        search_type = st.selectbox("Select search type:", ["all", "clinical trials", "reviews"], index=2)
+                        max_results = st.number_input("Max results:", min_value=1, max_value=100, value=10)
                         years_back = st.number_input("Number of years back:", min_value=1, max_value=50, value=3)
             elif restrict_domains == "General Knowledge":
                 domains = reliable_domains
@@ -524,18 +517,22 @@ def main():
                                     {'role': 'user', 'content': original_query}]
                     response_pubmed_search_terms = create_chat_completion(pubmed_messages, temperature=0.3, )
                     pubmed_search_terms = response_pubmed_search_terms.choices[0].message.content
-                    st.write(f'Here are the pubmed terms: {pubmed_search_terms}')
-                    
-                    articles = pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back)
-                    app.add(str(articles), data_type='text')
-                    for article in articles:
-                        st.markdown(f"### [{article['title']}]({article['link']})")
-                        st.write(f"Year: {article['year']}")
-                        if article['abstract']:
-                            st.write(article['abstract'])
-                        else:
-                            st.write("No abstract available")
-                    
+                    # st.write(f'Here are the pubmed terms: {pubmed_search_terms}')
+                    if using_pubmed:
+                        articles, urls = pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back)
+                        app.add(str(articles), data_type='text')
+                        for url in urls:
+                            app.add(str(url), data_type='web_page')
+                        with st.expander("PubMed Abstracts"):
+                            st.write(f'PubMed search terms: {pubmed_search_terms}')
+                            for article in articles:
+                                st.markdown(f"### [{article['title']}]({article['link']})")
+                                st.write(f"Year: {article['year']}")
+                                if article['abstract']:
+                                    st.write(article['abstract'])
+                                else:
+                                    st.write("No abstract available")
+                        
                     
                     
                 with st.spinner(f'Searching for "{google_search_terms}"...'):
@@ -588,7 +585,8 @@ def main():
                 if answer:                  
                     full_response = f"**Internet Based Response:** {answer} \n\n Search terms: {google_search_terms} \n\n"
                                     
-                if citations:                                                                                           
+                if citations:      
+                    # st.write(f"**Citations:** {citations}")                                                                                     
                     full_response += "\n\n**Sources**:\n"                                                   
                     sources = []                                                                            
                     for i, citation in enumerate(citations):                                                

@@ -238,7 +238,7 @@ optimize_pubmed_search_terms_system_prompt = """You are a highly specialized AI 
 """
 
 rag_prompt = """Using only context provided and considering it is {current_datetime}, provide the best possible answer to satisfy the user, with supporting evidence noted explicitly 
-where possible. If the question isn't answered in the context, note: "Question not answerable with current context."
+where possible. Do not cite sources prior to 2020. If the question isn't answered in the context, note: "Question not answerable with current context."
 
 Additional guidance: 
 For complex queries, create a plan with sub-parts and solve step by step with double checks using the retrieved context. 
