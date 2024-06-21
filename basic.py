@@ -14,6 +14,8 @@ import markdown2
 
 from embedchain import App
 from embedchain.config import BaseLlmConfig
+from knowledge_graph_rag.document import Document
+from knowledge_graph_rag.documents_graph import DocumentsGraph
 
 
 from prompts import (
@@ -31,6 +33,15 @@ st.set_page_config(page_title='Helpful AI', layout='centered', page_icon=':steth
 # Set your API keys
 api_key = st.secrets["OPENAI_API_KEY"]
 exa = Exa(st.secrets["EXA_API_KEY"])  # Exa.ai API key
+
+def get_embedding_batch(input_array):
+    from openai import OpenAI
+    client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
+    response = client.embeddings.create(
+        input=input_array,
+        model="text-embedding-3-small"
+    )
+    return [data.embedding for data in response.data]
 
 # Function to replace the first user message
 def replace_first_user_message(messages, new_message):
@@ -486,7 +497,21 @@ def main():
                     st.session_state.rag_response = full_response
                 container1 = st.container(border=True)
                 # container1.markdown(st.session_state.rag_response)
-                              
+                import chromadb
+                vectordb_name = "cvd_vectors"
+                client = app.PersistentClient(path=vectordb_name)
+                collection = client.create_collection(vectordb_name)
+                embeddings = get_embedding_batch(sources)
+                vectors_collection = [{document : embedding} for document, embedding in zip(sources, embeddings)]     
+                collection.add(
+                    embeddings=embeddings,
+                    documents=sources,
+                    metadatas=[{"source" : ""} for i in range(len(sources))],
+                    ids=list(map(str, range(len(sources))))
+)
+                documents_graph = DocumentsGraph(documents=sources)
+                documents_graph.plot()          
+                documents_graph.save("med_graph")    
                 st.session_state.source_chunks = refine_output(citations)
                 with container1:
                     st.markdown(st.session_state.rag_response)
