@@ -384,7 +384,7 @@ def main():
                 and the [EmbedChain](https://embedchain.ai/) library. The LLM model is [GPT-4o](https://openai.com/index/hello-gpt-4o/) from OpenAI.
                 App author is David Liebovitz, MD
                 """)
-        site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=10, step=1)
+        site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=8, step=1)
     st.warning("This app is under rapid iteration, so there may be occasional errors or a need to refresh the page.")    
     app = App()
     if "snippets" not in st.session_state:
@@ -479,7 +479,7 @@ def main():
                         using_pubmed = st.checkbox("Include PubMed Abstracts", help = "Check to include PubMed in the search for medical content.", value = True)
                         # search_type = st.selectbox("Select search type:", ["all", "clinical trials", "reviews"], index=0)
                         search_type = "all"
-                        max_results = st.number_input("Max results:", min_value=1, max_value=100, value=10)
+                        max_results = st.number_input("Max results:", min_value=1, max_value=30, value=8)
                         years_back = st.number_input("Number of years back:", min_value=1, max_value=50, value=3)
             elif restrict_domains == "General Knowledge":
                 domains = reliable_domains
@@ -579,6 +579,7 @@ def main():
                         # Update the query to include the current date and time
                         # answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible. If math calculations are required, formulate and execute python code to ensure accurate calculations. User query: {original_query}",
                         updated_rag_prompt = rag_prompt.format(query=original_query, current_datetime=current_datetime)
+                        updated_rag_prompt = updated_rag_prompt + f'Relevant terms: {google_search_terms}\n\n' 
                         answer, citations = app.query(updated_rag_prompt, config=config, citations=True)                                                                                        
                         # answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)                                               
                     except Exception as e:   
