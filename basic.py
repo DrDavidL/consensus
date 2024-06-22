@@ -55,22 +55,24 @@ def extract_abstract_from_xml(xml_data, pmid):
     return "No abstract available"
 
 def pubmed_abstracts(search_terms, search_type="all", max_results=5, years_back=3):
-    search_terms_encoded = requests.utils.quote(search_terms)
+    # search_terms_encoded = requests.utils.quote(search_terms)
 
-    if search_type == "all":
-        publication_type_filter = ""
-    elif search_type == "clinical trials":
-        publication_type_filter = "+AND+Clinical+Trial[Publication+Type]"
-    elif search_type == "reviews":
-        publication_type_filter = "+AND+Review[Publication+Type]"
-    else:
-        raise ValueError("Invalid search_type parameter. Use 'all', 'clinical trials', or 'reviews'.")
+    # if search_type == "all":
+    #     publication_type_filter = ""
+    # elif search_type == "clinical trials":
+    #     publication_type_filter = "+AND+Clinical+Trial[Publication+Type]"
+    # elif search_type == "reviews":
+    #     publication_type_filter = "+AND+Review[Publication+Type]"
+    # else:
+    #     raise ValueError("Invalid search_type parameter. Use 'all', 'clinical trials', or 'reviews'.")
 
     current_year = datetime.now().year
     start_year = current_year - years_back
-    search_query = f"{search_terms_encoded}{publication_type_filter}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
+    # search_query = f"{search_terms_encoded}{publication_type_filter}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
+    search_query = f"{search_terms}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
+    # st.write(f"HI Search query: {search_query}")
     
-    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
+    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
     
     try:
         response = requests.get(url)
@@ -239,7 +241,9 @@ def embedchain_bot(db_path, api_key):
                 "provider": "chroma",
                 "config": {"collection_name": "ai-helper", "dir": db_path, "allow_reset": True},
             },
-            "embedder": {"provider": "openai", "config": {"api_key": api_key, "model": 'text-embedding-3-small'}},
+            "embedder": {"provider": "openai", 
+                         "config": {"api_key": api_key, 
+                                    "model": 'text-embedding-3-small'}},
             "chunker": {"chunk_size": 2000, "chunk_overlap": 0, "length_function": "len"},
         }
     )
@@ -516,177 +520,180 @@ def main():
             #     st.info("Exa.ai is a new type of search tool that predicts relevant sites. Helpful for general knowledge, not for specialized medical or current events.")
             
         if st.button('Begin Research'):
-            st.divider()
-            app.reset()
-            app.reset()
-            app.reset()
+            try:
             
-            if restrict_domains != "No Internet":
-                current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                search_messages = [{'role': 'system', 'content': optimize_search_terms_system_prompt},
-                                    {'role': 'user', 'content': f'considering it is {current_datetime}, {original_query}'}]    
-                response_google_search_terms = create_chat_completion(search_messages, temperature=0.3, )
-                google_search_terms = response_google_search_terms.choices[0].message.content
-                # st.write(f'Here are the total tokens used: {response_google_search_terms.usage.total_tokens}')
-                # st.write(f'Here are the prompt tokens used: {response_google_search_terms.usage.prompt_tokens}')
-                # st.write(f'Here are the response tokens used: {response_google_search_terms.usage.completion_tokens}')
-                if restrict_domains == "Medical":
-                    pubmed_messages = [{'role': 'system', 'content': optimize_pubmed_search_terms_system_prompt},
-                                    {'role': 'user', 'content': original_query}]
-                    response_pubmed_search_terms = create_chat_completion(pubmed_messages, temperature=0.3, )
-                    pubmed_search_terms = response_pubmed_search_terms.choices[0].message.content
-                    # st.write(f'Here are the pubmed terms: {pubmed_search_terms}')
-                    if using_pubmed:
-                        articles, urls = pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back)
-                        app.add(str(articles), data_type='text')
-                        for url in urls:
-                            app.add(str(url), data_type='web_page')
-                        with st.expander("View PubMed Abstracts"):
-                            st.warning("Note this is a focused PubMed search emphasizing consensus.")
-                            st.write(f'**Search Strategy:** {pubmed_search_terms}')
-                            # st.write(f'Article Types (may change in left sidebar): {search_type}')
-                            for article in articles:
-                                st.markdown(f"### [{article['title']}]({article['link']})")
-                                st.write(f"Year: {article['year']}")
-                                if article['abstract']:
-                                    st.write(article['abstract'])
-                                else:
-                                    st.write("No abstract available")
-                        
-                    
-                    
-                with st.spinner(f'Searching for "{google_search_terms}"...'):
-                    if internet_search_provider == "Google":
-                        st.session_state.snippets, st.session_state.urls = realtime_search(google_search_terms, domains, site_number)
-                    else:
-                        three_years_ago = datetime.now() - timedelta(days=3 * 365.25)
-                        date_cutoff = three_years_ago.strftime("%Y-%m-%d")
-                        search_response = exa.search_and_contents(google_search_terms, text={"include_html_tags": False, "max_characters": 1000}, 
-                                    highlights={"highlights_per_url": 2, "num_sentences": 5, "query": "This is the highlight query:"}, start_published_date=date_cutoff)
-                        st.session_state.snippets =[result.text for result in search_response.results]
-                        st.session_state.urls = [result.url for result in search_response.results]
-
-                with st.expander("View Internet Results (reliable medical domains only)"):
-                    for snippet in st.session_state.snippets:
-                        snippet = snippet.replace('<END OF SITE>', '')
-                        st.markdown(snippet)
+                st.divider()
+                app.reset()
+                app.reset()
+                app.reset()
                 
-                # Initialize a list to store blocked sites
-                blocked_sites = []
-                
-                with st.spinner('Retrieving full content from web pages...'):
-                    for site in st.session_state.urls:
-                        try:
-                            app.add(site, data_type='web_page')
+                if restrict_domains != "No Internet":
+                    current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    search_messages = [{'role': 'system', 'content': optimize_search_terms_system_prompt},
+                                        {'role': 'user', 'content': f'considering it is {current_datetime}, {original_query}'}]    
+                    response_google_search_terms = create_chat_completion(search_messages, temperature=0.3, )
+                    google_search_terms = response_google_search_terms.choices[0].message.content
+                    # st.write(f'Here are the total tokens used: {response_google_search_terms.usage.total_tokens}')
+                    # st.write(f'Here are the prompt tokens used: {response_google_search_terms.usage.prompt_tokens}')
+                    # st.write(f'Here are the response tokens used: {response_google_search_terms.usage.completion_tokens}')
+                    if restrict_domains == "Medical":
+                        pubmed_messages = [{'role': 'system', 'content': optimize_pubmed_search_terms_system_prompt},
+                                        {'role': 'user', 'content': original_query}]
+                        response_pubmed_search_terms = create_chat_completion(pubmed_messages, temperature=0.3, )
+                        pubmed_search_terms = response_pubmed_search_terms.choices[0].message.content
+                        # st.write(f'Here are the pubmed terms: {pubmed_search_terms}')
+                        if using_pubmed:
+                            articles, urls = pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back)
+                            app.add(str(articles), data_type='text')
+                            for url in urls:
+                                app.add(str(url), data_type='web_page')
+                            with st.expander("View PubMed Abstracts"):
+                                st.warning("Note this is a focused PubMed search emphasizing consensus.")
+                                st.write(f'**Search Strategy:** {pubmed_search_terms}')
+                                # st.write(f'Article Types (may change in left sidebar): {search_type}')
+                                for article in articles:
+                                    st.markdown(f"### [{article['title']}]({article['link']})")
+                                    st.write(f"Year: {article['year']}")
+                                    if article['abstract']:
+                                        st.write(article['abstract'])
+                                    else:
+                                        st.write("No abstract available")
                             
-                        except Exception as e:
-                            # Collect the blocked sites
-                            blocked_sites.append(site)
+                        
+                        
+                    with st.spinner(f'Searching for "{google_search_terms}"...'):
+                        if internet_search_provider == "Google":
+                            st.session_state.snippets, st.session_state.urls = realtime_search(google_search_terms, domains, site_number)
+                        else:
+                            three_years_ago = datetime.now() - timedelta(days=3 * 365.25)
+                            date_cutoff = three_years_ago.strftime("%Y-%m-%d")
+                            search_response = exa.search_and_contents(google_search_terms, text={"include_html_tags": False, "max_characters": 1000}, 
+                                        highlights={"highlights_per_url": 2, "num_sentences": 5, "query": "This is the highlight query:"}, start_published_date=date_cutoff)
+                            st.session_state.snippets =[result.text for result in search_response.results]
+                            st.session_state.urls = [result.url for result in search_response.results]
 
-                if blocked_sites:
-                    with st.sidebar:
-                        with st.expander("Sites Blocking Use"):
-                            for site in blocked_sites:
-                                st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
+                    with st.expander("View Internet Results (reliable medical domains only)"):
+                        for snippet in st.session_state.snippets:
+                            snippet = snippet.replace('<END OF SITE>', '')
+                            st.markdown(snippet)
+                    
+                    # Initialize a list to store blocked sites
+                    blocked_sites = []
+                    
+                    with st.spinner('Retrieving full content from web pages...'):
+                        for site in st.session_state.urls:
+                            try:
+                                app.add(site, data_type='web_page')
+                                
+                            except Exception as e:
+                                # Collect the blocked sites
+                                blocked_sites.append(site)
 
-
-                llm_config = app.llm.config.as_dict()  
-                config = BaseLlmConfig(**llm_config) 
-                with st.spinner('Analyzing retrieved content...'):
-                    try:
-                        # Get the current date and time
-                        current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
-                        # Update the query to include the current date and time
-                        # answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible. If math calculations are required, formulate and execute python code to ensure accurate calculations. User query: {original_query}",
-                        updated_rag_prompt = rag_prompt.format(query=original_query, current_datetime=current_datetime)
-                        updated_rag_prompt = updated_rag_prompt + f'Relevant terms: {google_search_terms}\n\n' 
-                        answer, citations = app.query(updated_rag_prompt, config=config, citations=True)                                                                                        
-                        # answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)                                               
-                    except Exception as e:   
-                        st.error(f"Error during app query: {e}")                                                                   
-    
-                full_response = ""
-                if answer:                  
-                    full_response = f"**Internet Based Response:** {answer} \n\n Search terms: {google_search_terms} \n\n"
-                                    
-                if citations:      
-                    # st.write(f"**Citations:** {citations}")                                                                                     
-                    full_response += "\n\n**Sources**:\n"                                                   
-                    sources = []                                                                            
-                    for i, citation in enumerate(citations):                                                
-                        source = citation[1]["url"]                                                         
-                        pattern = re.compile(r"([^/]+)\.[^\.]+\.pdf$")                                      
-                        match = pattern.search(source)                                                      
-                        if match:                                                                           
-                            source = match.group(1) + ".pdf"                                                
-                        sources.append(source)                                                              
-                    sources = list(set(sources))                                                            
-                    for source in sources:                                                                  
-                        full_response += f"- {source}\n"
-                    st.session_state.rag_response = full_response
-                container1 = st.container(border=True)
-                # container1.markdown(st.session_state.rag_response)
-                              
-                st.session_state.source_chunks = refine_output(citations)
-                with container1:
-                    st.markdown(st.session_state.rag_response)
-                    with st.expander("View Source Excerpts"):
-                        st.markdown(st.session_state.source_chunks)
+                    if blocked_sites:
+                        with st.sidebar:
+                            with st.expander("Sites Blocking Use"):
+                                for site in blocked_sites:
+                                    st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
 
 
+                    llm_config = app.llm.config.as_dict()  
+                    config = BaseLlmConfig(**llm_config) 
+                    with st.spinner('Analyzing retrieved content...'):
+                        try:
+                            # Get the current date and time
+                            current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+                            # Update the query to include the current date and time
+                            # answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible. If math calculations are required, formulate and execute python code to ensure accurate calculations. User query: {original_query}",
+                            updated_rag_prompt = rag_prompt.format(query=original_query, current_datetime=current_datetime, search_terms = google_search_terms)
+                            answer, citations = app.query(updated_rag_prompt, config=config, citations=True)                                                                                        
+                            # answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)                                               
+                        except Exception as e:   
+                            st.error(f"Error during app query: {e}")                                                                   
+        
+                    full_response = ""
+                    if answer:                  
+                        full_response = f"As of **{current_datetime}:**\n\n{answer} \n\n"
+                                        
+                    if citations:      
+                        # st.write(f"**Citations:** {citations}")                                                                                     
+                        full_response += "\n\n**Sources**:\n"                                                   
+                        sources = []                                                                            
+                        for i, citation in enumerate(citations):                                                
+                            source = citation[1]["url"]                                                         
+                            pattern = re.compile(r"([^/]+)\.[^\.]+\.pdf$")                                      
+                            match = pattern.search(source)                                                      
+                            if match:                                                                           
+                                source = match.group(1) + ".pdf"                                                
+                            sources.append(source)                                                              
+                        sources = list(set(sources))                                                            
+                        for source in sources:                                                                  
+                            full_response += f"- {source}\n"
+                        st.session_state.rag_response = full_response
+                    container1 = st.container(border=True)
+                    # container1.markdown(st.session_state.rag_response)
+                                
+                    st.session_state.source_chunks = refine_output(citations)
+                    with container1:
+                        st.markdown(st.session_state.rag_response)
+                        with st.expander("View Source Excerpts"):
+                            st.markdown(st.session_state.source_chunks)
 
 
-            try:            
-                completion = create_chat_completion(messages=find_experts_messages, temperature=0.3, response_format="json_object")
-            except Exception as e:
-                st.error(f"Error during OpenAI call: {e}")
-                return
-            with st.sidebar:
-                with st.expander("AI Personas Identified"):
-                    # st.write(f"**Response:**")
-                    json_output = completion.choices[0].message.content
-                    # st.write(json_output)
-                    experts, domains, expert_questions = extract_expert_info(json_output)
-                    st.session_state.experts = experts
-                    for expert in st.session_state.experts:
-                        st.write(f"**{expert}**")
-                    # st.write(f"**Experts:** {st.session_state.experts}")
-                    # st.write(f"**Domains:** {domains}")
-                    # st.write(f"**Expert Questions:** {expert_questions}")
-            
-            updated_expert1_system_prompt = expert1_system_prompt.format(expert=experts[0], domain=domains[0])
-            updated_expert2_system_prompt = expert2_system_prompt.format(expert=experts[1], domain=domains[1])
-            updated_expert3_system_prompt = expert3_system_prompt.format(expert=experts[2], domain=domains[2])
-            updated_question1 = expert_questions[0]
-            updated_question2 = expert_questions[1]
-            updated_question3 = expert_questions[2]
-            
-            if restrict_domains != "No Internet":
-                expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
-                                    {'role': 'user', 'content': updated_question1 + "Here's what I already found online: " + full_response}]
-                st.session_state.messages1 = expert1_messages
-                expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
-                                    {'role': 'user', 'content': updated_question2 + "Here's what I already found online: " + full_response}]
-                st.session_state.messages2 = expert2_messages
-                expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
-                                    {'role': 'user', 'content': updated_question3 + "Here's what I already found online: " + full_response}]
-                st.session_state.messages3 = expert3_messages
+
+
+                try:            
+                    completion = create_chat_completion(messages=find_experts_messages, temperature=0.3, response_format="json_object")
+                except Exception as e:
+                    st.error(f"Error during OpenAI call: {e}")
+                    return
+                with st.sidebar:
+                    with st.expander("AI Personas Identified"):
+                        # st.write(f"**Response:**")
+                        json_output = completion.choices[0].message.content
+                        # st.write(json_output)
+                        experts, domains, expert_questions = extract_expert_info(json_output)
+                        st.session_state.experts = experts
+                        for expert in st.session_state.experts:
+                            st.write(f"**{expert}**")
+                        # st.write(f"**Experts:** {st.session_state.experts}")
+                        # st.write(f"**Domains:** {domains}")
+                        # st.write(f"**Expert Questions:** {expert_questions}")
                 
-            else:
-                expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
-                                    {'role': 'user', 'content': updated_question1}]
-                st.session_state.messages1 = expert1_messages
-                expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
-                                    {'role': 'user', 'content': updated_question2}]
-                st.session_state.messages2 = expert2_messages
-                expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
-                                    {'role': 'user', 'content': updated_question3}]
-                st.session_state.messages3 = expert3_messages
-            
-            with st.spinner('Waiting for experts to respond...'):
-                st.session_state.expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
+                updated_expert1_system_prompt = expert1_system_prompt.format(expert=experts[0], domain=domains[0])
+                updated_expert2_system_prompt = expert2_system_prompt.format(expert=experts[1], domain=domains[1])
+                updated_expert3_system_prompt = expert3_system_prompt.format(expert=experts[2], domain=domains[2])
+                updated_question1 = expert_questions[0]
+                updated_question2 = expert_questions[1]
+                updated_question3 = expert_questions[2]
+                
+                if restrict_domains != "No Internet":
+                    expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
+                                        {'role': 'user', 'content': updated_question1 + "Here's what I already found online: " + full_response}]
+                    st.session_state.messages1 = expert1_messages
+                    expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
+                                        {'role': 'user', 'content': updated_question2 + "Here's what I already found online: " + full_response}]
+                    st.session_state.messages2 = expert2_messages
+                    expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
+                                        {'role': 'user', 'content': updated_question3 + "Here's what I already found online: " + full_response}]
+                    st.session_state.messages3 = expert3_messages
+                    
+                else:
+                    expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
+                                        {'role': 'user', 'content': updated_question1}]
+                    st.session_state.messages1 = expert1_messages
+                    expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
+                                        {'role': 'user', 'content': updated_question2}]
+                    st.session_state.messages2 = expert2_messages
+                    expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
+                                        {'role': 'user', 'content': updated_question3}]
+                    st.session_state.messages3 = expert3_messages
+                
+                with st.spinner('Waiting for experts to respond...'):
+                    st.session_state.expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
 
+            except ConnectionError:
+                st.error("A web connection error occurred. Please click submit again. Thanks!")
 
         if st.session_state.snippets:
             with st.sidebar:

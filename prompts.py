@@ -257,13 +257,26 @@ AND
 (review[Publication Type] OR systematic review[Text Word] OR meta-analysis[Text Word] OR guideline[Publication Type] OR practice guideline[Publication Type] OR consensus development conference[Publication Type] OR guidelines[Text Word] OR consensus[Text Word] OR recommendation[Text Word] OR position statement[Text Word]))
 """
 
-rag_prompt = """Using only context provided and considering it is {current_datetime}, provide the best possible answer to satisfy the user, with supporting evidence noted explicitly 
-where possible. Do not cite sources prior to 2020. If the question isn't answered in the context, note: "Question not answerable with current context."
-
+rag_prompt_old = """Using only context provided and considering it is {current_datetime}, provide the best possible answer to satisfy the user, with supporting evidence noted explicitly 
+where possible. Do not cite sources prior to 2020. If the question isn't answered in the context, note: "Question not answerable with current context." 
 Additional guidance: 
-For complex queries, create a plan with sub-parts and solve step by step with double checks using the retrieved context. 
-If complex math calculations are needed, use Python and display the code. Then, methodically and carefully execute each step of the code. Provide the code execution output to augment your response.
+- For complex queries, create a plan with sub-parts and solve step by step with double checks using the retrieved context. 
+- For the list of supporting assertions, include evidence details or caveats if availabl from the context:
 
 User query: {query}
 
+Response:
+**Context based answer:**
+...
+
+List of supporting assertions: 
+...
+"""
+
+rag_prompt = """Context - you receive text sections from reliable internet sites applicable to the user query: {query} and query search terms: {search_terms}.
+Your task is to answer the user query, {query} with its search terms, {search_terms}, only using the supplied context and today's date, {current_datetime}. If this isn't possible, state: "Question not answerable with
+current context. When answering the query, follow this approach:
+
+1. **Bottomline:** <Provide a helpful answer to the user query based on the context.>
+2. **Supporting Assertions:** <Provide an expanded list of key statements from the context that support your answer. Include any caveats, conditions, requirements, and additional considerations for full understanding by the user.>
 """
