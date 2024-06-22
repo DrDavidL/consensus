@@ -237,9 +237,9 @@ def embedchain_bot(db_path, api_key):
             },
             "vectordb": {
                 "provider": "chroma",
-                "config": {"collection_name": "chat-pdf", "dir": db_path, "allow_reset": True},
+                "config": {"collection_name": "ai-helper", "dir": db_path, "allow_reset": True},
             },
-            "embedder": {"provider": "openai", "config": {"api_key": api_key}},
+            "embedder": {"provider": "openai", "config": {"api_key": api_key, "model": 'text-embedding-3-small'}},
             "chunker": {"chunk_size": 2000, "chunk_overlap": 0, "length_function": "len"},
         }
     )
@@ -527,6 +527,9 @@ def main():
                                     {'role': 'user', 'content': f'considering it is {current_datetime}, {original_query}'}]    
                 response_google_search_terms = create_chat_completion(search_messages, temperature=0.3, )
                 google_search_terms = response_google_search_terms.choices[0].message.content
+                # st.write(f'Here are the total tokens used: {response_google_search_terms.usage.total_tokens}')
+                # st.write(f'Here are the prompt tokens used: {response_google_search_terms.usage.prompt_tokens}')
+                # st.write(f'Here are the response tokens used: {response_google_search_terms.usage.completion_tokens}')
                 if restrict_domains == "Medical":
                     pubmed_messages = [{'role': 'system', 'content': optimize_pubmed_search_terms_system_prompt},
                                     {'role': 'user', 'content': original_query}]
