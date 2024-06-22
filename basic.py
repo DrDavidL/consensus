@@ -538,10 +538,10 @@ def main():
                         app.add(str(articles), data_type='text')
                         for url in urls:
                             app.add(str(url), data_type='web_page')
-                        with st.expander("PubMed Abstracts"):
+                        with st.expander("View PubMed Abstracts"):
                             st.warning("Note this is a focused PubMed search emphasizing consensus.")
-                            st.write(f'PubMed search terms: {pubmed_search_terms}')
-                            st.write(f'Article Types (may change in left sidebar): {search_type}')
+                            st.write(f'**Search Strategy:** {pubmed_search_terms}')
+                            # st.write(f'Article Types (may change in left sidebar): {search_type}')
                             for article in articles:
                                 st.markdown(f"### [{article['title']}]({article['link']})")
                                 st.write(f"Year: {article['year']}")
@@ -562,7 +562,11 @@ def main():
                                     highlights={"highlights_per_url": 2, "num_sentences": 5, "query": "This is the highlight query:"}, start_published_date=date_cutoff)
                         st.session_state.snippets =[result.text for result in search_response.results]
                         st.session_state.urls = [result.url for result in search_response.results]
-        
+
+                with st.expander("View Internet Results (reliable medical domains only)"):
+                    for snippet in st.session_state.snippets:
+                        snippet = snippet.replace('<END OF SITE>', '')
+                        st.markdown(snippet)
                 
                 # Initialize a list to store blocked sites
                 blocked_sites = []
@@ -680,11 +684,16 @@ def main():
             with st.spinner('Waiting for experts to respond...'):
                 st.session_state.expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
 
-        # if st.session_state.rag_response:
-        #     with container1:
-        #         st.markdown(st.session_state.rag_response)
-        #         with st.expander("View Source Excerpts"):
-        #             st.markdown(st.session_state.source_chunks)
+
+        if st.session_state.snippets:
+            with st.sidebar:
+                st.divider()
+                st.info("Current Results")
+                with st.expander("View Links from Internet Search"):
+                    for snippet in st.session_state.snippets:
+                        snippet = snippet.replace('<END OF SITE>', '')
+                        st.markdown(snippet)
+        
         if st.session_state.expert_answers:   
             st.divider()
             container2 = st.container(border=True)
@@ -705,8 +714,7 @@ def main():
         
         if st.session_state.rag_response:            
             with st.sidebar:
-                st.divider()
-                st.info("Current Results")
+
                 with st.expander("Web Response and Sources"):
                     st.write(st.session_state.rag_response)
                     st.write(st.session_state.source_chunks)
@@ -755,12 +763,7 @@ def main():
                         html = markdown2.markdown(full_conversation, extras=["tables"])
                         st.download_button('Download Followup Responses', html, f'followup_responses.html', 'text/html')
         
-        if st.session_state.snippets:
-            with st.sidebar:
-                with st.expander("View Links from Internet Search"):
-                    for snippet in st.session_state.snippets:
-                        snippet = snippet.replace('<END OF SITE>', '')
-                        st.markdown(snippet)
+
         
         
         if st.session_state.followup_messages:            
