@@ -212,6 +212,7 @@ the optimal search terms.
 
 **Examples:**
 
+- "How are the Chicago Cubs doing?" → "Chicago Cubs 2024 standings"
 - "Are statins helpful?" → "Efficacy of statins in reducing cardiovascular events and LDL cholesterol levels in patients with hyperlipidemia"
 - "How to treat high blood pressure?" → "Current treatment guidelines for hypertension and effectiveness of antihypertensive medications"
 - "What causes type 2 diabetes?" → "Pathophysiology and risk factors of type 2 diabetes mellitus"
@@ -304,3 +305,38 @@ choose_domain = """You are an advanced language model. Your task is to interpret
 - "How does insulin work in the body?" → "medical"
 - "What is the capital of France?" → "site:www.wikipedia.org OR site:www.nationalgeographic.com OR site:www.britannica.com"
 """
+
+medical_domains = """site:www.nih.gov OR site:www.ncbi.nlm.nih.gov/books OR site:www.cdc.gov OR site:www.who.int OR site:www.pubmed.gov OR site:www.cochranelibrary.com OR
+    site:www.uptodate.com OR site:www.medscape.com OR site:www.ama-assn.org OR site:www.nejm.org OR
+    site:www.bmj.com OR site:www.thelancet.com OR site:www.jamanetwork.com OR site:www.mayoclinic.org OR site:www.acpjournals.org OR
+    site:www.cell.com OR site:www.nature.com OR site:www.springer.com OR site:www.wiley.com OR site:www.ahrq.gov OR site:www.nccn.org/guidelines/category_1 OR
+    site:www.healthline.com OR site:www.medicalnewstoday.com OR site:www.webmd.com OR site:emedicine.medscape.com OR
+    site:www.niddk.nih.gov OR site:kff.org OR site:academic.oup.com OR site:www.sciencedirect.com OR
+    site:www.fda.gov OR site:www.ema.europa.eu OR site:clinicaltrials.gov OR site:drugs.com OR
+    site:www.merckmanuals.com OR site:health.harvard.edu OR site:stanfordhealthcare.org OR site:clevelandclinic.org OR
+    site:my.clevelandclinic.org OR site:arxiv.org OR site:www.cancer.gov OR site:www.cms.gov OR site:www.niaid.nih.gov OR
+    site:medlineplus.gov OR site:www.guidelines.gov OR site:www.hrsa.gov OR site:www.heart.org OR
+    site:www.biomedcentral.com OR site:www.nccn.org
+    """
+
+reliable_domains_old = """site:www.cnn.com OR site:www.bbc.com OR site:www.npr.org OR site:www.reuters.com OR site:www.theguardian.com OR
+site:www.nytimes.com OR site:www.washingtonpost.com OR site:www.nbcnews.com OR site:www.cbsnews.com OR site:www.abcnews.go.com OR
+site:www.apnews.com OR site:www.bloomberg.com OR site:www.forbes.com OR site:www.nationalgeographic.com OR site:www.scientificamerican.com OR
+site:www.nature.com OR site:www.newscientist.com OR site:www.smithsonianmag.com OR site:www.wikipedia.org OR site:www.history.com OR
+site:www.britannica.com OR site:www.theatlantic.com OR site:www.vox.com OR site:www.propublica.org OR site:www.economist.com OR
+site:www.pbs.org OR site:www.nature.org OR site:www.academic.oup.com OR site:www.ted.com OR site:www.nasa.gov OR site:arxiv.org OR
+site:www.jstor.org OR site:scholar.google.com OR site:www.mit.edu OR site:www.stanford.edu OR site:www.harvard.edu OR
+site:www.yale.edu OR site:www.princeton.edu OR
+site:www.asahi.com OR site:www.ft.com OR site:www.wsj.com OR site:www.weather.com"""
+
+reliable_domains = """site:www.cnn.com OR site:www.bbc.com OR site:www.npr.org OR site:www.reuters.com OR site:www.theguardian.com OR
+site:www.nytimes.com OR site:www.washingtonpost.com OR site:www.nbcnews.com OR site:www.cbsnews.com OR site:www.abcnews.go.com OR
+site:www.apnews.com OR site:www.bloomberg.com OR site:www.forbes.com OR site:www.nationalgeographic.com OR site:www.scientificamerican.com OR
+site:www.nature.com OR site:www.newscientist.com OR site:www.smithsonianmag.com OR site:www.wikipedia.org OR site:www.history.com OR
+site:www.britannica.com OR site:www.theatlantic.com OR site:www.vox.com OR site:www.propublica.org OR site:www.economist.com OR
+site:www.pbs.org OR site:www.nature.org OR site:www.academic.oup.com OR site:www.ted.com OR site:www.nasa.gov OR site:arxiv.org OR
+site:www.jstor.org OR site:scholar.google.com OR site:www.mit.edu OR site:www.stanford.edu OR site:www.harvard.edu OR
+site:www.yale.edu OR site:www.princeton.edu OR site:www.asahi.com OR site:www.ft.com OR site:www.wsj.com OR site:www.weather.com OR
+site:www.weather.gov OR site:www.accuweather.com OR site:www.wunderground.com OR site:www.tripadvisor.com OR site:www.lonelyplanet.com OR
+site:www.expedia.com OR site:www.kayak.com OR site:www.skyscanner.com OR site:www.booking.com OR site:www.travelocity.com OR
+site:www.hotels.com"""
