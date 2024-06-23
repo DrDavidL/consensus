@@ -391,9 +391,9 @@ def main():
                 App author is David Liebovitz, MD
                 """)
         site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=8, step=1)
-    st.info("""This app is more complex that it appears. Your question content is analyzed, specific internet resouces are retrieved, including
-            relevant PubMed review articles if applicable. A preliminary answer is generated. Three alternative personas using the same retrieved information
-            are asked to provide their opinions on the topic.""")
+    st.info("""This app is more complex than it appears. Your question is analyzed, specific internet resouces are retrieved, including
+            relevant PubMed review articles if applicable. A preliminary answer is generated. Three alternative personas using retrieved information
+            are then asked to provide their opinions on the topic.""")
     st.warning("Please click again if you see an error. This app is under rapid iteration.")    
     app = App()
     if "snippets" not in st.session_state:
