@@ -700,15 +700,15 @@ def main():
             except Exception as e:
                 st.error(f"Error during OpenAI call: {e}")
                 return
-            with st.sidebar:
-                with st.expander("AI Personas Identified"):
-                    # st.write(f"**Response:**")
-                    json_output = completion.choices[0].message.content
-                    # st.write(json_output)
-                    experts, domains, expert_questions = extract_expert_info(json_output)
-                    st.session_state.experts = experts
-                    for expert in st.session_state.experts:
-                        st.write(f"**{expert}**")
+            # with st.sidebar:
+            #     with st.expander("AI Personas Identified"):
+            #         # st.write(f"**Response:**")
+            #         json_output = completion.choices[0].message.content
+            #         # st.write(json_output)
+            #         experts, domains, expert_questions = extract_expert_info(json_output)
+            #         st.session_state.experts = experts
+            #         for expert in st.session_state.experts:
+            #             st.write(f"**{expert}**")
                     # st.write(f"**Experts:** {st.session_state.experts}")
                     # st.write(f"**Domains:** {domains}")
                     # st.write(f"**Expert Questions:** {expert_questions}")
