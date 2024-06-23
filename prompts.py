@@ -226,7 +226,9 @@ optimize_pubmed_search_terms_system_prompt = """You are a highly specialized AI 
 - **Specify the condition or topic**: Include the medical condition or topic in precise terms, using both MeSH terms and text words. Example: ("hypertension"[MeSH Terms] OR "high blood pressure"[Text Word]).
 - **Emphasize Consensus**: As shown in examples, emphasize terms like "systematic review", "meta-analysis", "guideline", "consensus", or "recommendation" to focus on high-quality evidence.
 - **Add context or population**: Mention the specific context or population if relevant. Example: "in adults", "in patients with hyperlipidemia".
-- **Only include essential terms**: Focus on the core concepts and avoid unnecessary words or phrases that will not contribute to the search results.
+- **Include Only Essential Terms**: Focus on the core concepts and avoid unnecessary words or phrases that will not contribute to the search results.
+- **Use Boolean Operators**: Combine search terms using Boolean operators (AND, OR) with appropriate use of parentheses to refine the search query effectively.
+- **Use Quotes Appropriately** : Use quotes only for text word entries or known MeSH terms to avoid any errors in the search query.
 
 **Examples:**
 
@@ -274,9 +276,31 @@ List of supporting assertions:
 """
 
 rag_prompt = """Context - you receive text sections from reliable internet sites applicable to the user query: {query} and query search terms: {search_terms}.
-Your task is to answer the user query, {query} with its search terms, {search_terms}, only using the supplied context and today's date, {current_datetime}. If this isn't possible, state: "Question not answerable with
-current context. When answering the query, follow this approach:
+Your task is to anticipate what the user really wants from the user query, {query} with its search terms, {search_terms}, only using the supplied context and today's date, {current_datetime}. If this isn't possible, state: "Question not answerable with
+current context. Users are health professionals, so no disclaimers and use technical terms. When answering the query, give the answer (don't just say how to get it) and follow this approach:
 
 1. **Bottomline:** <Provide a helpful answer to the user query based on the context.>
-2. **Supporting Assertions:** <Provide an expanded list of key statements from the context that support your answer. Include any caveats, conditions, requirements, and additional considerations for full understanding by the user.>
+2. **Supporting Assertions:** <Provide an expanded list of key statements from the context that support your answer. Include relevant statistics, any caveats, conditions, requirements, and additional considerations for full understanding by the user.>
+"""
+
+choose_domain = """You are an advanced language model. Your task is to interpret user queries and classify them into one of two categories: "medical" or "general knowledge." 
+
+1. **Medical**: This category includes queries related to health, diseases, symptoms, treatments, medical conditions, medications, anatomy, physiology, medical procedures, medical devices, and other healthcare-related topics.
+
+2. **General Knowledge**: This category includes all other topics not related to medical or healthcare domains, such as history, geography, technology, science (excluding medical sciences), arts, literature, entertainment, and general education.
+
+**Instructions:**
+
+- Analyze the user query.
+- Determine if the query is related to medical or healthcare topics.
+- If the query is related to medical or healthcare topics, return "medical".
+- If the query is not related to medical or healthcare topics, identify 3 web domains most likely to have the answer. Return "site:domain1 OR site:domain2 OR site:domain3".
+- Provide only the classification ("medical" or "general knowledge") with no additional commentary.
+
+**Examples:**
+
+- "What are the symptoms of diabetes?" → "medical"
+- "Who was the first president of the United States?" → "site:www.wikipedia.org OR site:www.britannica.com OR site:www.history.com"
+- "How does insulin work in the body?" → "medical"
+- "What is the capital of France?" → "site:www.wikipedia.org OR site:www.nationalgeographic.com OR site:www.britannica.com"
 """
