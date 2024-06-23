@@ -481,7 +481,8 @@ def main():
     if check_password():
     
         # Obtain the initial query from the user
-        original_query = st.text_area('Ask a nice question from *Which antibiotic to use for Lyme disease* to *How are the Chicago Cubs doing*!', placeholder='Enter your question here...', help = "Ask any knowledge-based question.")
+        with col1: 
+            original_query = st.text_area('Ask a nice question from *Which antibiotic to use for Lyme disease* to *How are the Chicago Cubs doing*!', placeholder='Enter your question here...', help = "Ask any knowledge-based question.")
         st.session_state.original_question = original_query
         find_experts_messages = [{'role': 'system', 'content': system_prompt_expert_questions}, 
                                 {'role': 'user', 'content': original_query}]
@@ -527,7 +528,7 @@ def main():
                         domains = st.session_state.chosen_domain     
                 try:
                 
-                    st.divider()
+                    # st.divider()
                     app.reset()
                     app.reset()
                     # app.reset()
