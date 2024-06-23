@@ -447,6 +447,9 @@ def main():
     if "articles" not in st.session_state:
         st.session_state.articles = []
         
+    if "pubmed_search_terms" not in st.session_state:
+        st.session_state.pubmed_search_terms = ""
+        
     
     if check_password():
     
@@ -584,7 +587,7 @@ def main():
                 response_pubmed_search_terms = create_chat_completion(pubmed_messages, temperature=0.3, )
                 pubmed_search_terms = response_pubmed_search_terms.choices[0].message.content
                 # st.write(f'Here are the pubmed terms: {pubmed_search_terms}')
-
+                st.session_state.pubmed_search_terms = pubmed_search_terms
                 articles, urls = pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back)
                 st.session_state.articles = articles
                 app.add(str(articles), data_type='text')
@@ -596,7 +599,7 @@ def main():
                 with st.expander("View PubMed Abstracts Added to Knowledge Bbase"):
                     st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")
                     # st.write(f'**Search Strategy:** {pubmed_search_terms}')
-                    pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + pubmed_search_terms
+                    pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
                     # st.write("[View PubMed Search Results]({pubmed_link})")
                     st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
                     # st.write(f'Article Types (may change in left sidebar): {search_type}')
@@ -700,15 +703,15 @@ def main():
             except Exception as e:
                 st.error(f"Error during OpenAI call: {e}")
                 return
-            # with st.sidebar:
-            #     with st.expander("AI Personas Identified"):
-            #         # st.write(f"**Response:**")
-            #         json_output = completion.choices[0].message.content
-            #         # st.write(json_output)
-            #         experts, domains, expert_questions = extract_expert_info(json_output)
-            #         st.session_state.experts = experts
-            #         for expert in st.session_state.experts:
-            #             st.write(f"**{expert}**")
+            with st.sidebar:
+                with st.expander("AI Personas Identified"):
+                    # st.write(f"**Response:**")
+                    json_output = completion.choices[0].message.content
+                    # st.write(json_output)
+                    experts, domains, expert_questions = extract_expert_info(json_output)
+                    st.session_state.experts = experts
+                    for expert in st.session_state.experts:
+                        st.write(f"**{expert}**")
                     # st.write(f"**Experts:** {st.session_state.experts}")
                     # st.write(f"**Domains:** {domains}")
                     # st.write(f"**Expert Questions:** {expert_questions}")
@@ -754,6 +757,9 @@ def main():
                     snippet = snippet.replace('<END OF SITE>', '')
                     st.markdown(snippet)
             with st.expander("View PubMed Abstracts Added to Knowledge Base"):
+                pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
+                    # st.write("[View PubMed Search Results]({pubmed_link})")
+                st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
                 for article in st.session_state.articles:
                     st.markdown(f"### [{article['title']}]({article['link']})")
                     st.write(f"Year: {article['year']}")
