@@ -508,6 +508,7 @@ def main():
                 # with st.sidebar:
                 #     st.info("Exa.ai is a new type of search tool that predicts relevant sites. Helpful for general knowledge, not for specialized medical or current events.")
         first_view = False
+ 
         if st.button('Begin Research'):
             
             with col1:
