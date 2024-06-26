@@ -662,7 +662,8 @@ def main():
                     st.session_state.pubmed_search_terms = pubmed_search_terms
                     articles, urls = asyncio.run(pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back))
                     st.session_state.articles = articles
-                    app.add(str(articles), data_type='text')
+                    if articles:
+                        app.add(str(articles), data_type='text')
                     for url in urls:
                         try:
                             app.add(str(url), data_type='web_page')
