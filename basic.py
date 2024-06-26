@@ -508,8 +508,12 @@ def main():
                 # with st.sidebar:
                 #     st.info("Exa.ai is a new type of search tool that predicts relevant sites. Helpful for general knowledge, not for specialized medical or current events.")
         first_view = False
- 
-        if st.button('Begin Research'):
+        col2.write(" ")
+        col2.write(" ")
+        col2.write(" ")
+        col2.write(" ")
+        col2.write(" ")
+        if col2.button('Begin Research'):
             
             with col1:
             
@@ -615,11 +619,11 @@ def main():
                             # Collect the blocked sites
                             blocked_sites.append(site)
 
-                if blocked_sites:
-                    with st.sidebar:
-                        with st.expander("Sites Blocking Use"):
-                            for site in blocked_sites:
-                                st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
+                # if blocked_sites:
+                #     with st.sidebar:
+                #         with st.expander("Sites Blocking Use"):
+                #             for site in blocked_sites:
+                #                 st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
 
 
                 llm_config = app.llm.config.as_dict()  
