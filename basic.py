@@ -34,6 +34,7 @@ st.set_page_config(page_title='Helpful AI', layout='wide', page_icon=':stethosco
 
 # Set your API keys
 api_key = st.secrets["OPENAI_API_KEY"]
+api_key_anthropic = st.secrets["ANTHROPIC_API_KEY"]  # Anthropic API key
 exa = Exa(st.secrets["EXA_API_KEY"])  # Exa.ai API key
 
 # Function to replace the first user message
@@ -330,14 +331,14 @@ def embedchain_bot(db_path, api_key):
     return App.from_config(
         config={
             "llm": {
-                "provider": "openai",
+                "provider": "anthropic",
                 "config": {
-                    "model": "gpt-4o",
+                    "model": "claude-3-5-sonnet-20240620",
                     "temperature": 0.5,
                     "max_tokens": 4000,
                     "top_p": 1,
-                    "stream": True,
-                    "api_key": api_key,
+                    "stream": False,
+                    "api_key": api_key_anthropic,
                 },
             },
             "vectordb": {
