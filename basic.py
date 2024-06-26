@@ -57,7 +57,107 @@ def extract_abstract_from_xml(xml_data, pmid):
                 return abstract_text
     return "No abstract available"
 
-def pubmed_abstracts(search_terms, search_type="all", max_results=5, years_back=3):
+async def fetch_additional_results(session, search_query, max_results, current_count):
+    additional_needed = max_results - current_count
+    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={additional_needed}&api_key={st.secrets['pubmed_api_key']}"
+    
+    async with session.get(url) as response:
+        data = await response.json()
+        return data['esearchresult']['idlist'] if 'idlist' in data['esearchresult'] else []
+
+async def fetch_article_details(session, id, details_url, abstracts_url):
+    async with session.get(details_url) as details_response:
+        details_data = await details_response.json()
+    
+    async with session.get(abstracts_url) as abstracts_response:
+        abstracts_data = await abstracts_response.text()
+    
+    return id, details_data, abstracts_data
+
+async def pubmed_abstracts(search_terms, search_type="all", max_results=5, years_back=3):
+    current_year = datetime.now().year
+    start_year = current_year - years_back
+    search_query = f"{search_terms}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
+    
+    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
+    
+    async with aiohttp.ClientSession() as session:
+        async with session.get(url) as response:
+            data = await response.json()
+            
+            if 'count' in data['esearchresult'] and int(data['esearchresult']['count']) == 0:
+                st.write("No results found. Try a different search or try again after re-loading the page.")
+                return [], []
+
+        ids = data['esearchresult']['idlist']
+        if not ids:
+            st.write("No results found.")
+            return [], []
+
+        articles = []
+        unique_urls = set()
+        tasks = []
+
+        for id in ids:
+            details_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={id}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
+            abstracts_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={id}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
+            tasks.append(fetch_article_details(session, id, details_url, abstracts_url))
+
+        results = await asyncio.gather(*tasks)
+
+        for id, details_data, abstracts_data in results:
+            if 'result' in details_data and str(id) in details_data['result']:
+                article = details_data['result'][str(id)]
+                year = article['pubdate'].split(" ")[0]
+                if year.isdigit():
+                    abstract = extract_abstract_from_xml(abstracts_data, id)
+                    article_url = f"https://pubmed.ncbi.nlm.nih.gov/{id}"
+                    if abstract.strip():
+                        articles.append({
+                            'title': article['title'],
+                            'year': year,
+                            'link': article_url,
+                            'abstract': abstract.strip()
+                        })
+                        unique_urls.add(article_url)
+            else:
+                st.warning(f"Details not available for ID {id}")
+
+        # If we don't have enough results with abstracts, fetch more
+        while len(articles) < max_results:
+            additional_ids = await fetch_additional_results(session, search_query, max_results, len(articles))
+            if not additional_ids:
+                break  # No more results available
+
+            additional_tasks = []
+            for id in additional_ids:
+                details_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={id}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
+                abstracts_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={id}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
+                additional_tasks.append(fetch_article_details(session, id, details_url, abstracts_url))
+
+            additional_results = await asyncio.gather(*additional_tasks)
+
+            for id, details_data, abstracts_data in additional_results:
+                if 'result' in details_data and str(id) in details_data['result']:
+                    article = details_data['result'][str(id)]
+                    year = article['pubdate'].split(" ")[0]
+                    if year.isdigit():
+                        abstract = extract_abstract_from_xml(abstracts_data, id)
+                        article_url = f"https://pubmed.ncbi.nlm.nih.gov/{id}"
+                        if abstract.strip():
+                            articles.append({
+                                'title': article['title'],
+                                'year': year,
+                                'link': article_url,
+                                'abstract': abstract.strip()
+                            })
+                            unique_urls.add(article_url)
+                            if len(articles) >= max_results:
+                                break
+
+    return articles[:max_results], list(unique_urls)
+
+def pubmed_abstracts_old(search_terms, search_type="all", max_results=5, years_back=3):
     # search_terms_encoded = requests.utils.quote(search_terms)
 
     # if search_type == "all":
@@ -532,11 +632,9 @@ def main():
                         # if edited_reliable_domains == reliable_domains:
                         domains = st.session_state.chosen_domain     
                 try:
-                
-                    # st.divider()
-                    app.reset()
-                    app.reset()
-                    # app.reset()
+                    if len(app.get_data_sources() ) > 0:
+                        # st.divider()
+                        app.reset()
                 
                 except: 
                     st.error("Error resetting app; just proceed")    
@@ -562,7 +660,7 @@ def main():
                     pubmed_search_terms = response_pubmed_search_terms.choices[0].message.content
                     # st.write(f'Here are the pubmed terms: {pubmed_search_terms}')
                     st.session_state.pubmed_search_terms = pubmed_search_terms
-                    articles, urls = pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back)
+                    articles, urls = asyncio.run(pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back))
                     st.session_state.articles = articles
                     app.add(str(articles), data_type='text')
                     for url in urls:
@@ -571,7 +669,7 @@ def main():
                         except ConnectionError:
                             st.error("A web connection error occurred. Please click submit again. Thanks!")
                     
-                    with st.expander("View PubMed Abstracts Added to Knowledge Bbase"):
+                    with st.expander("View PubMed Abstracts Added to Knowledge Base"):
                         st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")
                         # st.write(f'**Search Strategy:** {pubmed_search_terms}')
                         pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms

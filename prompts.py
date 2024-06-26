@@ -280,7 +280,7 @@ rag_prompt = """Context - you receive text sections from reliable internet sites
 Your task is to anticipate what the user really wants from the user query, {query} with its search terms, {search_terms}, only using the supplied context and today's date, {current_datetime}. If this isn't possible, state: "Question not answerable with
 current context. Users are health professionals, so no disclaimers and use technical terms. When answering the query, give the answer (don't just say how to get it) and follow this approach:
 
-1. **Bottomline:** <Provide a helpful answer to the user query based on the context.>
+1. **Bottomline:** <Provide a helpful answer to the user query based on the context. If credible conflicting evidence exists, explain this.>
 2. **Supporting Assertions:** <Provide an expanded list of key statements from the context that support your answer. Include relevant statistics, any caveats, conditions, requirements, and additional considerations for full understanding by the user.>
 """
 
