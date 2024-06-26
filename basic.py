@@ -664,11 +664,12 @@ def main():
                     st.session_state.articles = articles
                     if articles:
                         app.add(str(articles), data_type='text')
-                    for url in urls:
-                        try:
-                            app.add(str(url), data_type='web_page')
-                        except ConnectionError:
-                            st.error("A web connection error occurred. Please click submit again. Thanks!")
+                    if urls:
+                        for url in urls:
+                            try:
+                                app.add(str(url), data_type='web_page')
+                            except ConnectionError:
+                                st.error("A web connection error occurred. Please click submit again. Thanks!")
                     
                     with st.expander("View PubMed Abstracts Added to Knowledge Base"):
                         st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")

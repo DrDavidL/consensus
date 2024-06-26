@@ -293,10 +293,10 @@ choose_domain = """You are an advanced language model. Your task is to interpret
 **Instructions:**
 
 - Analyze the user query.
-- Determine if the query is related to medical or healthcare topics.
-- If the query is related to medical or healthcare topics, return "medical".
-- If the query is not related to medical or healthcare topics, identify 3 web domains most likely to have the answer. Return "site:domain1 OR site:domain2 OR site:domain3".
-- Provide only the classification ("medical" or "general knowledge") with no additional commentary.
+- Determine if the query is related to medical care or if PubMed is likely to have relevant content.
+- If the query is related to medical care or PubMed is likely helpful, return "medical".
+- If the query is not deemed "medical", identify 3 web domains most likely to have the answer. Return "site:domain1 OR site:domain2 OR site:domain3".
+- Return either the classification "medical" or "site:domain1 OR site:domain2 OR site:domain3" (using applicable domains) and no additional commentary.
 
 **Examples:**
 
