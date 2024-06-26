@@ -740,7 +740,7 @@ def main():
                         st.error(f"Error during app query: {e}")                                                                   
 
                 full_response = ""
-                if answer:                  
+                if answer:                 
                     full_response = f"As of **{current_datetime}:**\n\n{answer} \n\n"
                     first_view = True
                                     
@@ -764,6 +764,7 @@ def main():
                             
                 st.session_state.source_chunks = refine_output(citations)
                 with container1:
+                    st.info("Preliminary Retrieved Response - See Balanced Expert Persona Opinions")
                     st.markdown(st.session_state.rag_response)
                     with st.expander("View Source Excerpts"):
                         st.markdown(st.session_state.source_chunks)
@@ -841,6 +842,7 @@ def main():
                             else:
                                 st.write("No abstract available")
                 if st.session_state.rag_response:
+                    st.info("Preliminary Retrieved Response - See Balanced Expert Opinions")
                     container1 = st.container(border=True)
                     with container1:
                         st.markdown(st.session_state.rag_response)
