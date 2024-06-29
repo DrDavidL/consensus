@@ -87,7 +87,7 @@ async def pubmed_abstracts(search_terms, search_type="all", max_results=5, years
             data = await response.json()
             
             if 'count' in data['esearchresult'] and int(data['esearchresult']['count']) == 0:
-                st.write("No results found. Try a different search or try again after re-loading the page.")
+                st.write("No PubMed results found within the time period. Expand time range in settings or try a different question.")
                 return [], []
 
         ids = data['esearchresult']['idlist']
@@ -661,7 +661,8 @@ def main():
                     pubmed_search_terms = response_pubmed_search_terms.choices[0].message.content
                     # st.write(f'Here are the pubmed terms: {pubmed_search_terms}')
                     st.session_state.pubmed_search_terms = pubmed_search_terms
-                    articles, urls = asyncio.run(pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back))
+                    with st.spinner(f'Searching PubMed for "{pubmed_search_terms}"...'):
+                        articles, urls = asyncio.run(pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back))
                     st.session_state.articles = articles
                     if articles:
                         app.add(str(articles), data_type='text')
