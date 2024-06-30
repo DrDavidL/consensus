@@ -11,6 +11,8 @@ from openai import OpenAI
 from exa_py import Exa
 import markdown2
 import xml.etree.ElementTree as ET
+from typing import Optional, List, Tuple, Dict
+
 
 from embedchain import App
 from embedchain.config import BaseLlmConfig
@@ -44,7 +46,7 @@ def replace_first_user_message(messages, new_message):
             messages[i] = new_message
             break
 
-def extract_abstract_from_xml(xml_data, pmid):
+def extract_abstract_from_xml_old(xml_data, pmid):
     root = ET.fromstring(xml_data)
     for article in root.findall(".//PubmedArticle"):
         medline_citation = article.find("MedlineCitation")
@@ -58,24 +60,63 @@ def extract_abstract_from_xml(xml_data, pmid):
                 return abstract_text
     return "No abstract available"
 
-async def fetch_additional_results(session, search_query, max_results, current_count):
+
+
+async def extract_abstract_from_xml(xml_data: str, pmid: str) -> str:
+    try:
+        root = ET.fromstring(xml_data)
+        for article in root.findall(".//PubmedArticle"):
+            medline_citation = article.find("MedlineCitation")
+            if medline_citation:
+                pmid_element = medline_citation.find("PMID")
+                if pmid_element is not None and pmid_element.text == pmid:
+                    abstract_element = medline_citation.find(".//Abstract")
+                    if abstract_element is not None:
+                        abstract_texts = []
+                        for elem in abstract_element.findall("AbstractText"):
+                            label = elem.get("Label")
+                            text = ET.tostring(elem, encoding='unicode', method='text').strip()
+                            if label:
+                                abstract_texts.append(f"{label}: {text}")
+                            else:
+                                abstract_texts.append(text)
+                        return " ".join(abstract_texts).strip()
+        return "No abstract available"
+    except ET.ParseError:
+        print(f"Error parsing XML for PMID {pmid}")
+        return "Error extracting abstract"
+
+
+async def fetch_additional_results(session: aiohttp.ClientSession, search_query: str, max_results: int, current_count: int) -> List[str]:
     additional_needed = max_results - current_count
     url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={additional_needed}&api_key={st.secrets['pubmed_api_key']}"
     
-    async with session.get(url) as response:
-        data = await response.json()
-        return data['esearchresult']['idlist'] if 'idlist' in data['esearchresult'] else []
+    try:
+        async with session.get(url) as response:
+            response.raise_for_status()
+            data = await response.json()
+            return data['esearchresult'].get('idlist', [])
+    except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+        print(f"Error fetching additional results: {e}")
+        return []
 
-async def fetch_article_details(session, id, details_url, abstracts_url):
-    async with session.get(details_url) as details_response:
-        details_data = await details_response.json()
-    
-    async with session.get(abstracts_url) as abstracts_response:
-        abstracts_data = await abstracts_response.text()
-    
-    return id, details_data, abstracts_data
+async def fetch_article_details(session: aiohttp.ClientSession, id: str, details_url: str, abstracts_url: str, semaphore: asyncio.Semaphore) -> Tuple[str, Dict, str]:
+    async with semaphore:
+        try:
+            async with session.get(details_url) as details_response:
+                details_response.raise_for_status()
+                details_data = await details_response.json()
+            
+            async with session.get(abstracts_url) as abstracts_response:
+                abstracts_response.raise_for_status()
+                abstracts_data = await abstracts_response.text()
+            
+            return id, details_data, abstracts_data
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            print(f"Error fetching article details for ID {id}: {e}")
+            return id, {}, ""
 
-async def pubmed_abstracts(search_terms, search_type="all", max_results=5, years_back=3):
+async def pubmed_abstracts(search_terms: str, search_type: str = "all", max_results: int = 5, years_back: int = 3) -> Tuple[List[Dict[str, str]], List[str]]:
     current_year = datetime.now().year
     start_year = current_year - years_back
     search_query = f"{search_terms}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
@@ -83,69 +124,44 @@ async def pubmed_abstracts(search_terms, search_type="all", max_results=5, years
     url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
     
     async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            data = await response.json()
-            
-            if 'count' in data['esearchresult'] and int(data['esearchresult']['count']) == 0:
-                st.write("No PubMed results found within the time period. Expand time range in settings or try a different question.")
+        try:
+            async with session.get(url) as response:
+                response.raise_for_status()
+                data = await response.json()
+                
+                if 'esearchresult' not in data or 'count' not in data['esearchresult']:
+                    st.error("Unexpected response format from PubMed API")
+                    return [], []
+                
+                if int(data['esearchresult']['count']) == 0:
+                    st.write("No PubMed results found within the time period. Expand time range in settings or try a different question.")
+                    return [], []
+
+            ids = data['esearchresult'].get('idlist', [])
+            if not ids:
+                st.write("No results found.")
                 return [], []
 
-        ids = data['esearchresult']['idlist']
-        if not ids:
-            st.write("No results found.")
-            return [], []
+            articles = []
+            unique_urls = set()
+            semaphore = asyncio.Semaphore(5)  # Limit to 5 concurrent requests
+            tasks = []
 
-        articles = []
-        unique_urls = set()
-        tasks = []
-
-        for id in ids:
-            details_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={id}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
-            abstracts_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={id}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
-            tasks.append(fetch_article_details(session, id, details_url, abstracts_url))
-
-        results = await asyncio.gather(*tasks)
-
-        for id, details_data, abstracts_data in results:
-            if 'result' in details_data and str(id) in details_data['result']:
-                article = details_data['result'][str(id)]
-                year = article['pubdate'].split(" ")[0]
-                if year.isdigit():
-                    abstract = extract_abstract_from_xml(abstracts_data, id)
-                    article_url = f"https://pubmed.ncbi.nlm.nih.gov/{id}"
-                    if abstract.strip():
-                        articles.append({
-                            'title': article['title'],
-                            'year': year,
-                            'link': article_url,
-                            'abstract': abstract.strip()
-                        })
-                        unique_urls.add(article_url)
-            else:
-                st.warning(f"Details not available for ID {id}")
-
-        # If we don't have enough results with abstracts, fetch more
-        while len(articles) < max_results:
-            additional_ids = await fetch_additional_results(session, search_query, max_results, len(articles))
-            if not additional_ids:
-                break  # No more results available
-
-            additional_tasks = []
-            for id in additional_ids:
+            for id in ids:
                 details_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={id}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
                 abstracts_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={id}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
-                additional_tasks.append(fetch_article_details(session, id, details_url, abstracts_url))
+                tasks.append(fetch_article_details(session, id, details_url, abstracts_url, semaphore))
 
-            additional_results = await asyncio.gather(*additional_tasks)
+            results = await asyncio.gather(*tasks)
 
-            for id, details_data, abstracts_data in additional_results:
+            for id, details_data, abstracts_data in results:
                 if 'result' in details_data and str(id) in details_data['result']:
                     article = details_data['result'][str(id)]
                     year = article['pubdate'].split(" ")[0]
                     if year.isdigit():
-                        abstract = extract_abstract_from_xml(abstracts_data, id)
+                        abstract = await extract_abstract_from_xml(abstracts_data, id)
                         article_url = f"https://pubmed.ncbi.nlm.nih.gov/{id}"
-                        if abstract.strip():
+                        if abstract.strip() and abstract != "No abstract available":
                             articles.append({
                                 'title': article['title'],
                                 'year': year,
@@ -153,10 +169,50 @@ async def pubmed_abstracts(search_terms, search_type="all", max_results=5, years
                                 'abstract': abstract.strip()
                             })
                             unique_urls.add(article_url)
-                            if len(articles) >= max_results:
-                                break
+                else:
+                    print(f"Details not available for ID {id}")
+
+            # If we don't have enough results with abstracts, fetch more
+            while len(articles) < max_results:
+                additional_ids = await fetch_additional_results(session, search_query, max_results, len(articles))
+                if not additional_ids:
+                    break  # No more results available
+
+                additional_tasks = []
+                for id in additional_ids:
+                    details_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={id}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
+                    abstracts_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={id}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
+                    additional_tasks.append(fetch_article_details(session, id, details_url, abstracts_url, semaphore))
+
+                additional_results = await asyncio.gather(*additional_tasks)
+
+                for id, details_data, abstracts_data in additional_results:
+                    if 'result' in details_data and str(id) in details_data['result']:
+                        article = details_data['result'][str(id)]
+                        year = article['pubdate'].split(" ")[0]
+                        if year.isdigit():
+                            abstract = await extract_abstract_from_xml(abstracts_data, id)
+                            article_url = f"https://pubmed.ncbi.nlm.nih.gov/{id}"
+                            if abstract.strip() and abstract != "No abstract available":
+                                articles.append({
+                                    'title': article['title'],
+                                    'year': year,
+                                    'link': article_url,
+                                    'abstract': abstract.strip()
+                                })
+                                unique_urls.add(article_url)
+                                if len(articles) >= max_results:
+                                    break
+
+        except aiohttp.ClientError as e:
+            st.error(f"Error connecting to PubMed API: {e}")
+            return [], []
+        except Exception as e:
+            st.error(f"An unexpected error occurred: {e}")
+            return [], []
 
     return articles[:max_results], list(unique_urls)
+
 
 def pubmed_abstracts_old(search_terms, search_type="all", max_results=5, years_back=3):
     # search_terms_encoded = requests.utils.quote(search_terms)
@@ -457,30 +513,46 @@ def create_chat_completion(
     
     return completion
 
+import streamlit as st
+
 def check_password() -> bool:
+    """
+    Check if the entered password is correct and manage login state.
+    Also resets the app when a user successfully logs in.
+    """
+    # Initialize session state variables
     if "password" not in st.session_state:
         st.session_state.password = ""
+    if "password_correct" not in st.session_state:
+        st.session_state.password_correct = False
+    if "login_attempts" not in st.session_state:
+        st.session_state.login_attempts = 0
+
     def password_entered() -> None:
+        """Callback function when password is entered."""
         if st.session_state["password"] == st.secrets["password"]:
             st.session_state["password_correct"] = True
+            st.session_state.login_attempts = 0
+            # Reset the app
             app = App()
             app.reset()
             del st.session_state["password"]
         else:
             st.session_state["password_correct"] = False
+            st.session_state.login_attempts += 1
 
-    st.session_state.setdefault("password_correct", False)
+    # Check if password is correct
     if not st.session_state["password_correct"]:
         st.text_input("Password", type="password", on_change=password_entered, key='password')
+        
+        if st.session_state.login_attempts > 0:
+            st.error(f"😕 Password incorrect. Attempts: {st.session_state.login_attempts}")
+        
         st.write("*Please contact David Liebovitz, MD if you need an updated password for access.*")
         return False
 
-    if not st.session_state["password_correct"]:
-        st.text_input("Password", type="password", on_change=password_entered, key="password")
-        st.error("😕 Password incorrect")
-        return False
-
     return True
+
 
 def main():
     st.title('Helpful Answers with AI!')
@@ -633,8 +705,9 @@ def main():
                         # if edited_reliable_domains == reliable_domains:
                         domains = st.session_state.chosen_domain     
                 try:
+                    app = App()
                     if len(app.get_data_sources() ) > 0:
-                        # st.divider()
+                        # st.divider()                        
                         app.reset()
                 
                 except: 
@@ -664,30 +737,33 @@ def main():
                     with st.spinner(f'Searching PubMed for "{pubmed_search_terms}"...'):
                         articles, urls = asyncio.run(pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back))
                     st.session_state.articles = articles
-                    if articles:
-                        app.add(str(articles), data_type='text')
-                    if urls:
-                        for url in urls:
-                            try:
-                                app.add(str(url), data_type='web_page')
-                            except ConnectionError:
-                                st.error("A web connection error occurred. Please click submit again. Thanks!")
+                    with st.spinner("Adding PubMed abstracts to the knowledge base..."):
+                        if articles:
+                            app.add(str(articles), data_type='text')
+                        if urls:
+                            for url in urls:
+                                try:
+                                    app.add(str(url), data_type='web_page')
+                                except ConnectionError:
+                                    st.error("A web connection error occurred. Please click submit again. Thanks!")
                     
-                    with st.expander("View PubMed Abstracts Added to Knowledge Base"):
-                        st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")
-                        # st.write(f'**Search Strategy:** {pubmed_search_terms}')
-                        pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
-                        # st.write("[View PubMed Search Results]({pubmed_link})")
-                        st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
-                        # st.write(f'Article Types (may change in left sidebar): {search_type}')
-                        for article in articles:
-                            st.markdown(f"### [{article['title']}]({article['link']})")
-                            st.write(f"Year: {article['year']}")
-                            if article['abstract']:
-                                st.write(article['abstract'])
-                            else:
-                                st.write("No abstract available")
-                        
+                    with st.spinner("Optimizing display of abstracts..."):
+                    
+                        with st.expander("View PubMed Abstracts Added to Knowledge Base"):
+                            st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")
+                            # st.write(f'**Search Strategy:** {pubmed_search_terms}')
+                            pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
+                            # st.write("[View PubMed Search Results]({pubmed_link})")
+                            st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                            # st.write(f'Article Types (may change in left sidebar): {search_type}')
+                            for article in articles:
+                                st.markdown(f"### [{article['title']}]({article['link']})")
+                                st.write(f"Year: {article['year']}")
+                                if article['abstract']:
+                                    st.write(article['abstract'])
+                                else:
+                                    st.write("No abstract available")
+                            
                     
                     
                 with st.spinner(f'Searching for "{google_search_terms}"...'):

@@ -229,7 +229,9 @@ optimize_pubmed_search_terms_system_prompt = """You are a highly specialized AI 
 - **Add context or population**: Mention the specific context or population if relevant. Example: "in adults", "in patients with hyperlipidemia".
 - **Include Only Essential Terms**: Focus on the core concepts and avoid unnecessary words or phrases that will not contribute to the search results.
 - **Use Boolean Operators**: Combine search terms using Boolean operators (AND, OR) with appropriate use of parentheses to refine the search query effectively.
-- **Use Quotes Appropriately** : Use quotes only for text word entries or known MeSH terms to avoid any errors in the search query.
+- **Use Quotes Appropriately**: Use quotes only for multi-word text word entries. Do not use quotes for MeSH Terms or single-word entries.
+- **Handle MeSH Terms Correctly**: Do not use quotes for MeSH Terms. Use specific MeSH Terms when possible, rather than broad categories. For example, use "Anti-Bacterial Agents"[MeSH Terms] instead of "Antibiotics"[MeSH Terms].
+- **Include Specific Examples**: When dealing with categories like medications, include both general terms and specific examples as Text Words. For instance: (Anti-Bacterial Agents[MeSH Terms] OR "antibiotic therapy"[Text Word] OR doxycycline[Text Word] OR amoxicillin[Text Word])
 
 **Examples:**
 
