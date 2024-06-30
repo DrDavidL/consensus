@@ -17,6 +17,13 @@ from typing import Optional, List, Tuple, Dict
 from embedchain import App
 from embedchain.config import BaseLlmConfig
 
+import logging
+from requests.exceptions import RequestException
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 
 from prompts import (
     system_prompt_expert_questions,
@@ -356,7 +363,7 @@ def clean_text(text):
     text = re.sub(r"\s{2,}", " ", text)  # Replace multiple spaces with a single space
     return text
 
-def refine_output(data):
+def refine_output_old(data):
     # with st.expander("Source Excerpts:"):
     all_sources = ""
     for text, info in sorted(data, key=lambda x: x[1]['score'], reverse=True)[:8]:
@@ -371,6 +378,28 @@ def refine_output(data):
         # st.write("Text:\n", cleaned_text)
         # st.write("\n")
     return all_sources
+
+def refine_output(data):
+    all_sources = ""
+    for i, (text, info) in enumerate(sorted(data, key=lambda x: x[1]['score'], reverse=True)[:8], 1):
+        normalized_score = round(info['score'] * 100, 2)  # Assuming score is between 0 and 1
+        all_sources += f"**Source {i} (Relevance: {normalized_score}%)**\n\n"
+        
+        if 'url' in info:
+            all_sources += f"[Link to source]({info['url']})\n\n"
+        
+        cleaned_text = clean_text(text)
+        # Limit text to first 500 characters
+        truncated_text = cleaned_text[:500] + "..." if len(cleaned_text) > 500 else cleaned_text
+        all_sources += f"{truncated_text}\n\n"
+        
+        if "Table" in cleaned_text:
+            all_sources += "This source contains tabular data. Expand to view.\n\n"
+        
+        all_sources += "---\n\n"  # Separator between sources
+    
+    return all_sources
+
 
 
 
@@ -737,15 +766,39 @@ def main():
                     with st.spinner(f'Searching PubMed for "{pubmed_search_terms}"...'):
                         articles, urls = asyncio.run(pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back))
                     st.session_state.articles = articles
+                    st.session_state.articles = articles
                     with st.spinner("Adding PubMed abstracts to the knowledge base..."):
                         if articles:
-                            app.add(str(articles), data_type='text')
+                            try:
+                                app.add(str(articles), data_type='text')
+                            except Exception as e:
+                                logger.error(f"Error adding articles: {str(e)}")
+                                st.error("An error occurred while processing the articles. Please try again.")
+
                         if urls:
+                            successful_urls = []
+                            failed_urls = []
                             for url in urls:
                                 try:
                                     app.add(str(url), data_type='web_page')
-                                except ConnectionError:
-                                    st.error("A web connection error occurred. Please click submit again. Thanks!")
+                                    successful_urls.append(url)
+                                except RequestException as e:
+                                    logger.error(f"Connection error for URL {url}: {str(e)}")
+                                    failed_urls.append(url)
+                                except Exception as e:
+                                    logger.error(f"Unexpected error for URL {url}: {str(e)}")
+                                    failed_urls.append(url)
+
+                            # if successful_urls:
+                            #     st.success(f"Successfully added {len(successful_urls)} URLs to the knowledge base.")
+                            
+                            # if failed_urls:
+                            #     st.warning(f"Failed to add {len(failed_urls)} URLs. You may want to try these again.")
+                            #     if st.button("Show failed URLs"):
+                            #         st.write(failed_urls)
+
+                    if not articles and not urls:
+                        st.warning("No articles or URLs were provided to add to the knowledge base.")
                     
                     with st.spinner("Optimizing display of abstracts..."):
                     
@@ -754,7 +807,10 @@ def main():
                             # st.write(f'**Search Strategy:** {pubmed_search_terms}')
                             pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
                             # st.write("[View PubMed Search Results]({pubmed_link})")
-                            st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                            
+                            with st.popover("PubMed Search Terms"):
+                                st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                                st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
                             # st.write(f'Article Types (may change in left sidebar): {search_type}')
                             for article in articles:
                                 st.markdown(f"### [{article['title']}]({article['link']})")
@@ -913,7 +969,10 @@ def main():
                     with st.expander("View PubMed Abstracts Added to Knowledge Base"):
                         pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
                             # st.write("[View PubMed Search Results]({pubmed_link})")
-                        st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                        # st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                        with st.popover("PubMed Search Terms"):
+                            st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                            st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
                         for article in st.session_state.articles:
                             st.markdown(f"### [{article['title']}]({article['link']})")
                             st.write(f"Year: {article['year']}")
