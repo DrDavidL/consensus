@@ -53,20 +53,6 @@ def replace_first_user_message(messages, new_message):
             messages[i] = new_message
             break
 
-def extract_abstract_from_xml_old(xml_data, pmid):
-    root = ET.fromstring(xml_data)
-    for article in root.findall(".//PubmedArticle"):
-        medline_citation = article.find("MedlineCitation")
-        if medline_citation:
-            pmid_element = medline_citation.find("PMID")
-            if pmid_element is not None and pmid_element.text == pmid:
-                abstract_elements = medline_citation.findall(".//AbstractText")
-                abstract_text = ""
-                for elem in abstract_elements:
-                    abstract_text += ET.tostring(elem, encoding='unicode', method='text')
-                return abstract_text
-    return "No abstract available"
-
 
 
 async def extract_abstract_from_xml(xml_data: str, pmid: str) -> str:
@@ -589,9 +575,31 @@ def check_password() -> bool:
 
 def main():
     st.title('Helpful Answers with AI!')
-    with st.expander("Settings and About this app"):
-
-        
+    
+    app = App.from_config(
+        config={
+            "llm": {
+                "provider": "anthropic",
+                "config": {
+                    "model": "claude-3-5-sonnet-20240620",
+                    "temperature": 0.5,
+                    "max_tokens": 4000,
+                    "top_p": 1,
+                    "stream": False,
+                    "api_key": api_key_anthropic,
+                },
+            },
+            "vectordb": {
+                "provider": "chroma",
+                "config": {"collection_name": "ai-helper", "dir": "./db/", "allow_reset": True},
+            },
+            "embedder": {"provider": "openai", 
+                         "config": {"api_key": api_key, 
+                                    "model": 'text-embedding-3-small'}},
+            "chunker": {"chunk_size": 2000, "chunk_overlap": 0, "length_function": "len"},
+        }
+    )
+    with st.expander("Settings and About this app"):    
         with st.popover("Settings"):
             site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=8, step=1)
             internet_search_provider = st.radio("Internet search provider:", options=["Google", "Exa"], horizontal = True, help = "Only specific Google domains are used for retrieving current Medical or General Knowledge. Exa.ai is a new type of search tool that predicts relevant sites; domain filtering not yet added here.")
@@ -628,7 +636,7 @@ def main():
     #         are then asked to provide their opinions on the topic.""")
     
     col1, col2 = st.columns([1, 1])
-    app = App()
+
     if "snippets" not in st.session_state:
         st.session_state["snippets"] = []
     if "urls" not in st.session_state:
@@ -738,7 +746,7 @@ def main():
                         # if edited_reliable_domains == reliable_domains:
                         domains = st.session_state.chosen_domain     
                 try:
-                    app = App()
+
                     if len(app.get_data_sources() ) > 0:
                         # st.divider()                        
                         app.reset()
