@@ -20,6 +20,10 @@ from embedchain.config import BaseLlmConfig
 import logging
 from requests.exceptions import RequestException
 
+# __import__('pysqlite3')
+# import sys
+# sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+
 # Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

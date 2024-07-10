@@ -173,6 +173,7 @@ pypdf==4.2.0
 PyPika==0.48.9
 pyproject_hooks==1.1.0
 pysbd==0.3.4
+pysqlite3-binary
 python-dateutil==2.9.0.post0
 python-dotenv==1.0.1
 python-multipart==0.0.9
