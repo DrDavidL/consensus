@@ -92,7 +92,7 @@ knowledge-graph-rag==0.0.3
 kubernetes==29.0.0
 langchain==0.2.7
 langchain-anthropic==0.1.19
-langchain-community==0.0.36
+langchain-community==0.2.5
 langchain-core==0.2.12
 langchain-openai==0.0.5
 langchain-text-splitters==0.2.2
