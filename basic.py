@@ -53,20 +53,6 @@ def replace_first_user_message(messages, new_message):
             messages[i] = new_message
             break
 
-def extract_abstract_from_xml_old(xml_data, pmid):
-    root = ET.fromstring(xml_data)
-    for article in root.findall(".//PubmedArticle"):
-        medline_citation = article.find("MedlineCitation")
-        if medline_citation:
-            pmid_element = medline_citation.find("PMID")
-            if pmid_element is not None and pmid_element.text == pmid:
-                abstract_elements = medline_citation.findall(".//AbstractText")
-                abstract_text = ""
-                for elem in abstract_elements:
-                    abstract_text += ET.tostring(elem, encoding='unicode', method='text')
-                return abstract_text
-    return "No abstract available"
-
 
 
 async def extract_abstract_from_xml(xml_data: str, pmid: str) -> str:
@@ -363,21 +349,6 @@ def clean_text(text):
     text = re.sub(r"\s{2,}", " ", text)  # Replace multiple spaces with a single space
     return text
 
-def refine_output_old(data):
-    # with st.expander("Source Excerpts:"):
-    all_sources = ""
-    for text, info in sorted(data, key=lambda x: x[1]['score'], reverse=True)[:8]:
-        # st.write(f"Score: {info['score']}\n")
-        all_sources += f"Score: {info['score']}\n\n"
-        cleaned_text = clean_text(text) + "\n\n"
-        all_sources += cleaned_text
-        # if "Table" in cleaned_text:
-        #     st.write("Extracted Table:")
-        #     st.write(create_table_from_text(cleaned_text))  # Example of integrating table extraction
-        # else:
-        # st.write("Text:\n", cleaned_text)
-        # st.write("\n")
-    return all_sources
 
 def refine_output(data):
     all_sources = ""
@@ -412,48 +383,13 @@ def process_data(data):
         cleaned_text = clean_text(text)
         st.write(f"Score: {info['score']}\nText: {cleaned_text}\n")
 
-def embedchain_bot(db_path, api_key):
-    return App.from_config(
-        config={
-            "llm": {
-                "provider": "anthropic",
-                "config": {
-                    "model": "claude-3-5-sonnet-20240620",
-                    "temperature": 0.5,
-                    "max_tokens": 4000,
-                    "top_p": 1,
-                    "stream": False,
-                    "api_key": api_key_anthropic,
-                },
-            },
-            "vectordb": {
-                "provider": "chroma",
-                "config": {"collection_name": "ai-helper", "dir": db_path, "allow_reset": True},
-            },
-            "embedder": {"provider": "openai", 
-                         "config": {"api_key": api_key, 
-                                    "model": 'text-embedding-3-small'}},
-            "chunker": {"chunk_size": 2000, "chunk_overlap": 0, "length_function": "len"},
-        }
-    )
 
 
 def get_db_path():
     # tmpdirname = tempfile.mkdtemp()
-    tmpdirname = tempfile.mkdtemp(prefix= "pdf_")
+    tmpdirname = tempfile.mkdtemp(prefix= "db_")
     return tmpdirname
 
-
-def get_ec_app(api_key):
-    if "app" in st.session_state:
-        print("Found app in session state")
-        app = st.session_state.app
-    else:
-        print("Creating app")
-        db_path = get_db_path()
-        app = embedchain_bot(db_path, api_key)
-        st.session_state.app = app
-    return app
 
 def extract_expert_info(json_input):
     # Parse the JSON input
@@ -549,6 +485,10 @@ def check_password() -> bool:
     Check if the entered password is correct and manage login state.
     Also resets the app when a user successfully logs in.
     """
+    # Early return if st.secrets["docker"] == "docker"
+    if st.secrets["docker"] == "docker":
+        st.session_state.password_correct = True
+        return True
     # Initialize session state variables
     if "password" not in st.session_state:
         st.session_state.password = ""
@@ -585,9 +525,31 @@ def check_password() -> bool:
 
 def main():
     st.title('Helpful Answers with AI!')
-    with st.expander("Settings and About this app"):
-
-        
+    db_path = get_db_path()
+    app = App.from_config(
+        config={
+            "llm": {
+                "provider": "anthropic",
+                "config": {
+                    "model": "claude-3-5-sonnet-20240620",
+                    "temperature": 0.5,
+                    "max_tokens": 4000,
+                    "top_p": 1,
+                    "stream": False,
+                    "api_key": api_key_anthropic,
+                },
+            },
+            "vectordb": {
+                "provider": "chroma",
+                "config": {"collection_name": "ai-helper", "dir": db_path, "allow_reset": True},
+            },
+            "embedder": {"provider": "openai", 
+                         "config": {"api_key": api_key, 
+                                    "model": 'text-embedding-3-small'}},
+            "chunker": {"chunk_size": 2000, "chunk_overlap": 0, "length_function": "len"},
+        }
+    )
+    with st.expander("Settings and About this app"):    
         with st.popover("Settings"):
             site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=8, step=1)
             internet_search_provider = st.radio("Internet search provider:", options=["Google", "Exa"], horizontal = True, help = "Only specific Google domains are used for retrieving current Medical or General Knowledge. Exa.ai is a new type of search tool that predicts relevant sites; domain filtering not yet added here.")
@@ -624,7 +586,7 @@ def main():
     #         are then asked to provide their opinions on the topic.""")
     
     col1, col2 = st.columns([1, 1])
-    app = App()
+
     if "snippets" not in st.session_state:
         st.session_state["snippets"] = []
     if "urls" not in st.session_state:
@@ -734,7 +696,7 @@ def main():
                         # if edited_reliable_domains == reliable_domains:
                         domains = st.session_state.chosen_domain     
                 try:
-                    app = App()
+
                     if len(app.get_data_sources() ) > 0:
                         # st.divider()                        
                         app.reset()
@@ -1078,4 +1040,4 @@ def main():
 if __name__ == '__main__':
     main()
 
-from hello import hello
+
