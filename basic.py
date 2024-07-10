@@ -822,8 +822,8 @@ def main():
                 #                 st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
 
 
-                llm_config = app.llm.config.as_dict()  
-                config = BaseLlmConfig(**llm_config) 
+                # llm_config = app.llm.config.as_dict()  
+                # config = BaseLlmConfig(**llm_config) 
                 with st.spinner('Analyzing retrieved content...'):
                     try:
                         # Get the current date and time
@@ -832,7 +832,7 @@ def main():
                         # Update the query to include the current date and time
                         # answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible. If math calculations are required, formulate and execute python code to ensure accurate calculations. User query: {original_query}",
                         updated_rag_prompt = rag_prompt.format(query=original_query, current_datetime=current_datetime, search_terms = google_search_terms)
-                        answer, citations = app.query(updated_rag_prompt, config=config, citations=True)                                                                                        
+                        answer, citations = app.query(updated_rag_prompt, citations=True)                                                                                        
                         # answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)                                               
                     except Exception as e:   
                         st.error(f"Error during app query: {e}")                                                                   
