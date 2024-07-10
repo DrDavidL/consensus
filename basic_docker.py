@@ -349,21 +349,6 @@ def clean_text(text):
     text = re.sub(r"\s{2,}", " ", text)  # Replace multiple spaces with a single space
     return text
 
-def refine_output_old(data):
-    # with st.expander("Source Excerpts:"):
-    all_sources = ""
-    for text, info in sorted(data, key=lambda x: x[1]['score'], reverse=True)[:8]:
-        # st.write(f"Score: {info['score']}\n")
-        all_sources += f"Score: {info['score']}\n\n"
-        cleaned_text = clean_text(text) + "\n\n"
-        all_sources += cleaned_text
-        # if "Table" in cleaned_text:
-        #     st.write("Extracted Table:")
-        #     st.write(create_table_from_text(cleaned_text))  # Example of integrating table extraction
-        # else:
-        # st.write("Text:\n", cleaned_text)
-        # st.write("\n")
-    return all_sources
 
 def refine_output(data):
     all_sources = ""
@@ -398,48 +383,13 @@ def process_data(data):
         cleaned_text = clean_text(text)
         st.write(f"Score: {info['score']}\nText: {cleaned_text}\n")
 
-def embedchain_bot(db_path, api_key):
-    return App.from_config(
-        config={
-            "llm": {
-                "provider": "anthropic",
-                "config": {
-                    "model": "claude-3-5-sonnet-20240620",
-                    "temperature": 0.5,
-                    "max_tokens": 4000,
-                    "top_p": 1,
-                    "stream": False,
-                    "api_key": api_key_anthropic,
-                },
-            },
-            "vectordb": {
-                "provider": "chroma",
-                "config": {"collection_name": "ai-helper", "dir": db_path, "allow_reset": True},
-            },
-            "embedder": {"provider": "openai", 
-                         "config": {"api_key": api_key, 
-                                    "model": 'text-embedding-3-small'}},
-            "chunker": {"chunk_size": 2000, "chunk_overlap": 0, "length_function": "len"},
-        }
-    )
 
 
 def get_db_path():
     # tmpdirname = tempfile.mkdtemp()
-    tmpdirname = tempfile.mkdtemp(prefix= "pdf_")
+    tmpdirname = tempfile.mkdtemp(prefix= "db_")
     return tmpdirname
 
-
-def get_ec_app(api_key):
-    if "app" in st.session_state:
-        print("Found app in session state")
-        app = st.session_state.app
-    else:
-        print("Creating app")
-        db_path = get_db_path()
-        app = embedchain_bot(db_path, api_key)
-        st.session_state.app = app
-    return app
 
 def extract_expert_info(json_input):
     # Parse the JSON input
@@ -575,7 +525,7 @@ def check_password() -> bool:
 
 def main():
     st.title('Helpful Answers with AI!')
-    
+    db_path = get_db_path()
     app = App.from_config(
         config={
             "llm": {
@@ -591,7 +541,7 @@ def main():
             },
             "vectordb": {
                 "provider": "chroma",
-                "config": {"collection_name": "ai-helper", "dir": "./db/", "allow_reset": True},
+                "config": {"collection_name": "ai-helper", "dir": db_path, "allow_reset": True},
             },
             "embedder": {"provider": "openai", 
                          "config": {"api_key": api_key, 
