@@ -533,7 +533,6 @@ def main():
                 "config": {
                     "model": "claude-3-5-sonnet-20240620",
                     "temperature": 0.5,
-                    "max_tokens": 4000,
                     "top_p": 1,
                     "stream": False,
                     "api_key": api_key_anthropic,
