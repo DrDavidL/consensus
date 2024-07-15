@@ -36,7 +36,10 @@ from prompts import (
     expert3_system_prompt,
     optimize_search_terms_system_prompt,
     optimize_pubmed_search_terms_system_prompt,
+    cutting_edge_pubmed_prompt,
+    prepare_rag_query,
     rag_prompt,
+    rag_prompt2,
     choose_domain,
     medical_domains
 )
@@ -678,10 +681,12 @@ def main():
         col2.write(" ")
         col2.write(" ")
         col2.write(" ")
-        col2.write(" ")
-        col2.write(" ")
+        if col2.checkbox("Include Cutting-Edge Research in PubMed (default is consensus review articles)", help = "Check to include latest, not yet consensus, articles in the search for medical content.", value = False):
+            pubmed_prompt = cutting_edge_pubmed_prompt
+        else:
+            pubmed_prompt = optimize_pubmed_search_terms_system_prompt
         if col2.button('Begin Research'):
-            
+            st.session_state.pubmed_search_terms = ""
             with col1:
             
                 with st.spinner('Determining the best domain for your question...'):
@@ -703,6 +708,8 @@ def main():
                     if len(app.get_data_sources() ) > 0:
                         # st.divider()                        
                         app.reset()
+                        
+                    
                 
                 except: 
                     st.error("Error resetting app; just proceed")    
@@ -722,7 +729,7 @@ def main():
                 # st.write(f' here is the domain for logic: {st.session_state.chosen_domain}')
                 st.session_state.chosen_domain = st.session_state.chosen_domain.replace('"', '').replace("'", '')
                 if st.session_state.chosen_domain == "medical":
-                    pubmed_messages = [{'role': 'system', 'content': optimize_pubmed_search_terms_system_prompt},
+                    pubmed_messages = [{'role': 'system', 'content': pubmed_prompt},
                                     {'role': 'user', 'content': original_query}]
                     response_pubmed_search_terms = create_chat_completion(pubmed_messages, temperature=0.3, )
                     pubmed_search_terms = response_pubmed_search_terms.choices[0].message.content
@@ -800,6 +807,7 @@ def main():
                         st.session_state.urls = [result.url for result in search_response.results]
 
                 with st.expander("View Internet Results Added to Knowledge Base"):
+                    st.write(f'**Search Strategy:** {google_search_terms}')
                     # if st.session_state.chosen_domain != "medical":
                     #     st.write(f'Domains used: {st.session_state.chosen_domain}')
                     for url in st.session_state.urls:
@@ -831,11 +839,18 @@ def main():
                     try:
                         # Get the current date and time
                         current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
+                        prepare_rag_query_messages = [{'role': 'system', 'content': prepare_rag_query},
+                                                      {'role': 'user', 'content': original_query}]
+                        query_for_rag = create_chat_completion(prepare_rag_query_messages, temperature=0.3, )
+                        updated_rag_query = query_for_rag.choices[0].message.content
+                        # st.write(f"**Query for RAG:** {query_for_rag.choices[0].message.content}")
                         # Update the query to include the current date and time
                         # answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible. If math calculations are required, formulate and execute python code to ensure accurate calculations. User query: {original_query}",
-                        updated_rag_prompt = rag_prompt.format(query=original_query, current_datetime=current_datetime, search_terms = google_search_terms)
-                        answer, citations = app.query(updated_rag_prompt, citations=True)                                                                                        
+                        updated_rag_prompt = rag_prompt.format(xml_query=updated_rag_query, current_datetime=current_datetime)
+                        answer, citations = app.query(updated_rag_prompt, citations=True)        
+                        # updated_rag_prompt2 = rag_prompt2.format(query=original_query, answer = answer_prelim, current_datetime=current_datetime, search_terms = google_search_terms)  
+                        # answer, citations = app.query(updated_rag_prompt2, citations=True)
+                                                                                                      
                         # answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)                                               
                     except Exception as e:   
                         st.error(f"Error during app query: {e}")                                                                   
@@ -865,53 +880,57 @@ def main():
                             
                 st.session_state.source_chunks = refine_output(citations)
                 with container1:
-                    st.info("Preliminary Retrieved Response - See Balanced Expert Persona Opinions")
+                    st.info("Preliminary Retrieved Response - Also Ask for AI Expert Persona Opinions")
                     st.markdown(st.session_state.rag_response)
                     with st.expander("View Source Excerpts"):
                         st.markdown(st.session_state.source_chunks)
 
 
-            with col2: 
+        with col2: 
+            if st.session_state.rag_response:
+                if st.button("Ask 3 AI Experts"):
+                    prelim_response = st.session_state.rag_response + st.session_state.source_chunks
+                    
 
-                try:            
-                    completion = create_chat_completion(messages=find_experts_messages, temperature=0.3, response_format="json_object")
-                except Exception as e:
-                    st.error(f"Error during OpenAI call: {e}")
-                    return
+                    try:            
+                        completion = create_chat_completion(messages=find_experts_messages, temperature=0.3, response_format="json_object")
+                    except Exception as e:
+                        st.error(f"Error during OpenAI call: {e}")
+                        return
 
-                # st.write(f"**Response:**")
-                json_output = completion.choices[0].message.content
-                # st.write(json_output)
-                experts, domains, expert_questions = extract_expert_info(json_output)
-                st.session_state.experts = experts
-                # for expert in st.session_state.experts:
-                #     st.write(f"**{expert}**")
-                        # st.write(f"**Experts:** {st.session_state.experts}")
-                        # st.write(f"**Domains:** {domains}")
-                        # st.write(f"**Expert Questions:** {expert_questions}")
+                    # st.write(f"**Response:**")
+                    json_output = completion.choices[0].message.content
+                    # st.write(json_output)
+                    experts, domains, expert_questions = extract_expert_info(json_output)
+                    st.session_state.experts = experts
+                    # for expert in st.session_state.experts:
+                    #     st.write(f"**{expert}**")
+                            # st.write(f"**Experts:** {st.session_state.experts}")
+                            # st.write(f"**Domains:** {domains}")
+                            # st.write(f"**Expert Questions:** {expert_questions}")
+                    
+                    updated_expert1_system_prompt = expert1_system_prompt.format(expert=experts[0], domain=domains[0])
+                    updated_expert2_system_prompt = expert2_system_prompt.format(expert=experts[1], domain=domains[1])
+                    updated_expert3_system_prompt = expert3_system_prompt.format(expert=experts[2], domain=domains[2])
+                    updated_question1 = expert_questions[0]
+                    updated_question2 = expert_questions[1]
+                    updated_question3 = expert_questions[2]
+                    
+                    prelim_response = st.session_state.rag_response + st.session_state.source_chunks
+                    
+                    expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
+                                        {'role': 'user', 'content': updated_question1 + "Here's what I already found online: " + prelim_response}]
+                    st.session_state.messages1 = expert1_messages
+                    expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
+                                        {'role': 'user', 'content': updated_question2 + "Here's what I already found online: " + prelim_response}]
+                    st.session_state.messages2 = expert2_messages
+                    expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
+                                        {'role': 'user', 'content': updated_question3 + "Here's what I already found online: " + prelim_response}]
+                    st.session_state.messages3 = expert3_messages
+                    
                 
-                updated_expert1_system_prompt = expert1_system_prompt.format(expert=experts[0], domain=domains[0])
-                updated_expert2_system_prompt = expert2_system_prompt.format(expert=experts[1], domain=domains[1])
-                updated_expert3_system_prompt = expert3_system_prompt.format(expert=experts[2], domain=domains[2])
-                updated_question1 = expert_questions[0]
-                updated_question2 = expert_questions[1]
-                updated_question3 = expert_questions[2]
-                
-                prelim_response = st.session_state.rag_response + st.session_state.source_chunks
-                
-                expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
-                                    {'role': 'user', 'content': updated_question1 + "Here's what I already found online: " + prelim_response}]
-                st.session_state.messages1 = expert1_messages
-                expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
-                                    {'role': 'user', 'content': updated_question2 + "Here's what I already found online: " + prelim_response}]
-                st.session_state.messages2 = expert2_messages
-                expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
-                                    {'role': 'user', 'content': updated_question3 + "Here's what I already found online: " + prelim_response}]
-                st.session_state.messages3 = expert3_messages
-                
-            
-                with st.spinner('Waiting for experts to respond...'):
-                    st.session_state.expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
+                    with st.spinner('Waiting for experts to respond...'):
+                        st.session_state.expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
 
 
         # if st.session_state.snippets:
