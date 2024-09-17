@@ -44,14 +44,86 @@ from prompts import (
     medical_domains
 )
 
-st.set_page_config(page_title='Helpful AI', layout='wide', page_icon=':stethoscope:', initial_sidebar_state='auto')
-
-
-
+st.set_page_config(page_title='Helpful AI', layout='wide', page_icon=':stethoscope:', initial_sidebar_state='collapsed')
 # Set your API keys
 api_key = st.secrets["OPENAI_API_KEY"]
 api_key_anthropic = st.secrets["ANTHROPIC_API_KEY"]  # Anthropic API key
 exa = Exa(st.secrets["EXA_API_KEY"])  # Exa.ai API key
+
+with st.sidebar:
+
+    topic_model_choice = st.toggle("Subject Area: Use GPT-4o", help = "Toggle to use GPT-4o model for determining if medical; otherwise, 4o-mini.")
+    if topic_model_choice:
+        st.write("GPT-4o model selected.")
+        topic_model = "gpt-4o"
+    else:
+        st.write("GPT-4o-mini model selected.")
+        topic_model = "gpt-4o-mini"
+        
+    st.divider()
+    
+    rag_question_model_choice = st.toggle("RAG Question Wording Model: Use GPT-4o", help = "Toggle to use GPT-4o model for RAG; otherwise, 4o-mini.")
+    if rag_question_model_choice:
+        st.write("GPT-4o model selected.")
+        rag_question_model = "gpt-4o"
+    else:    
+        st.write("GPT-4o-mini model selected.")
+        rag_question_model = "gpt-4o-mini"
+        
+    st.divider()
+    
+    embedder_model_choice = st.toggle("Embedder Model: Use text-embedding-3-large", help = "Toggle to use text-embedding-3-large.")
+    if embedder_model_choice:
+        st.write("text-embedding-3-large model selected.")
+        embedder_model = "text-embedding-3-large"
+    else:
+        st.write("text-embedding-3-small model selected.")
+        embedder_model = "text-embedding-3-small"
+        
+    st.divider()
+
+    st.info("GPT-4o-mini performs well for other options. For more complex synthesis, change the RAG model to GPT-4o or to Claude-3.5 Sonnet.")
+    
+    rag_model_choice = st.radio("RAG Model Options", ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet",], help = "Select the RAG model to use for the AI responses.")
+    if rag_model_choice == "GPT-4o":
+        st.write("GPT-4o model selected.")
+        rag_model = "gpt-4o"
+        provider = "openai"
+        rag_key = api_key
+    elif rag_model_choice == "Claude-3.5 Sonnet":   
+        st.write("Claude-3-5-sonnet-20240620 model selected.")
+        rag_model = "claude-3-5-sonnet-20240620"
+        provider = "anthropic" 
+        rag_key = api_key_anthropic
+    elif rag_model_choice == "GPT-4o-mini":
+        st.write("GPT-4o-mini model selected.")
+        rag_model = "gpt-4o-mini"
+        provider = "openai"
+        rag_key = api_key
+        
+    elif rag_model_choice == "o1-mini":
+        st.write("o1-mini model selected.")
+        rag_model = "o1-mini"
+        provider = "openai"
+        rag_key = api_key
+        
+    elif rag_model_choice == "o1-preview":
+        st.write("o1-preview model selected.")
+        rag_model = "o1-preview"
+        provider = "openai"
+        rag_key = api_key
+
+    st.divider()
+    experts_model_choice = st.toggle("3 AI Experts Model: Use GPT-4o", help = "Toggle to use GPT-4o model for expert responses; otherwise, 4o-mini.")
+    if experts_model_choice:
+        st.write("GPT-4o model selected.")
+        experts_model = "gpt-4o"
+    else:
+        st.write("GPT-4o-mini model selected.")
+        experts_model = "gpt-4o-mini"
+        
+
+
 
 # Function to replace the first user message
 def replace_first_user_message(messages, new_message):
@@ -328,7 +400,7 @@ def realtime_search(query, domains, max, start_year=2020):
 
 
 # @cached(ttl=None, cache=Cache.MEMORY)
-async def get_response(messages):
+async def get_response(messages, model = experts_model):
     async with aiohttp.ClientSession() as session:
         response = await session.post(
             'https://api.openai.com/v1/chat/completions',
@@ -337,7 +409,7 @@ async def get_response(messages):
                 'Content-Type': 'application/json',
             },
             json={
-                'model': 'gpt-4o',
+                'model': model,
                 'messages': messages,
                 'temperature': 0.3,
             }
@@ -536,13 +608,13 @@ def main():
     app = App.from_config(
         config={
             "llm": {
-                "provider": "anthropic",
+                "provider": provider,
                 "config": {
-                    "model": "claude-3-5-sonnet-20240620",
+                    "model": rag_model,
                     "temperature": 0.5,
                     "top_p": 1,
                     "stream": False,
-                    "api_key": api_key_anthropic,
+                    "api_key": rag_key,
                 },
             },
             "vectordb": {
@@ -551,7 +623,7 @@ def main():
             },
             "embedder": {"provider": "openai", 
                          "config": {"api_key": api_key, 
-                                    "model": 'text-embedding-3-small'}},
+                                    "model": embedder_model}},
             "chunker": {"chunk_size": 2000, "chunk_overlap": 0, "length_function": "len"},
         }
     )
@@ -690,7 +762,7 @@ def main():
             with col1:
             
                 with st.spinner('Determining the best domain for your question...'):
-                    restrict_domains_response = create_chat_completion(determine_domain_messages, model = "gpt-4o", temperature=0.3, )
+                    restrict_domains_response = create_chat_completion(determine_domain_messages, model = topic_model, temperature=0.3, )
                     st.session_state.chosen_domain = restrict_domains_response.choices[0].message.content
                             # Update the `domains` variable based on the selection
                 if st.session_state.chosen_domain == "medical" and internet_search_provider == "Google":
@@ -841,7 +913,7 @@ def main():
                         current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         prepare_rag_query_messages = [{'role': 'system', 'content': prepare_rag_query},
                                                       {'role': 'user', 'content': original_query}]
-                        query_for_rag = create_chat_completion(prepare_rag_query_messages, temperature=0.3, )
+                        query_for_rag = create_chat_completion(prepare_rag_query_messages, model=rag_question_model, temperature=0.3, )
                         updated_rag_query = query_for_rag.choices[0].message.content
                         # st.write(f"**Query for RAG:** {query_for_rag.choices[0].message.content}")
                         # Update the query to include the current date and time
@@ -893,7 +965,7 @@ def main():
                     
 
                     try:            
-                        completion = create_chat_completion(messages=find_experts_messages, temperature=0.3, response_format="json_object")
+                        completion = create_chat_completion(messages=find_experts_messages, model = experts_model, temperature=0.3, response_format="json_object")
                     except Exception as e:
                         st.error(f"Error during OpenAI call: {e}")
                         return
