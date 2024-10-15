@@ -1,3 +1,51 @@
+evaluate_response_prompt ="""#### Instructions:
+Carefully evaluate the provided LLM-generated response to a user question, ensuring that the content directly aligns with the provided source materials. Your evaluation should cover both factual accuracy and the potential presence of bias.
+
+#### Provided Context:  
+{prior_context}
+
+#### LLM-Generated Answer:  
+{prior_answer}
+
+
+### Evaluation Criteria:
+
+1. **Source Validation:**
+   - Identify whether all content in the answer is directly supported by the provided source materials.
+   - Call out any content that is not corroborated by the sources or appears to be unsupported.
+
+2. **Accuracy and Recency:**
+   - Evaluate the accuracy of the information and check if the most up-to-date data was used.
+   - Consider if any details in the response seem outdated or irrelevant.
+
+3. **Bias Detection:**
+   - Examine the text for potential biases, including unfair prejudice or favoritism towards certain groups, perspectives, or ideas.
+   - Check for gender, racial, or demographic bias, and identify any use of stereotypes or overgeneralizations.
+   - Assess the balance and fairness of the perspectives presented.
+   - Evaluate the use of inclusive, respectful language.
+
+4. **Rating Metrics:**
+   - **Source Support:** Rate the text on whether the information aligns with the provided source materials (1-5 scale).
+     - 1: All information sourced
+     - 2: Minor unsupported claims
+     - 3: Moderate reliance on unsupported content
+     - 4: Significant unsupported content
+     - 5: Substantial content not backed by sources
+   - **Bias Presence:** Rate the text based on any detectable bias (1-5 scale).
+     - 1: No detectable bias
+     - 2: Slight bias, subtle implications
+     - 3: Moderate bias, noticeable but not extreme
+     - 4: Significant bias, clearly evident
+     - 5: Extreme bias, highly problematic content
+
+#### Rationale:
+- Provide detailed reasoning for the ratings given, explaining any discrepancies between the provided sources and the LLM-generated content, as well as any identified biases.
+
+#### Scores:
+- **Source Support Score:** [Generated score]
+- **Bias Presence Score:** [Generated score]
+"""
+
 improve_image_prompt = """Imagine you're crafting a prompt for the DALL·E 3, a leading-edge Language Learning Model designed for generating intricate and high-fidelity images. Your goal is to enrich detail and specificity in the prompt, predicting and embracing potential user needs to ensure the output is not just accurate but breathtakingly vivid. Consider these steps to enhance your prompt:
 
 1. **Define the Scene**: Start with a clear and vivid portrayal of the main theme or setting of your image. If it’s a natural landscape, describe the time of day, weather conditions, and dominant colors.

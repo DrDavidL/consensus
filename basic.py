@@ -41,7 +41,8 @@ from prompts import (
     rag_prompt,
     rag_prompt2,
     choose_domain,
-    medical_domains
+    medical_domains,
+    evaluate_response_prompt
 )
 
 st.set_page_config(page_title='Helpful AI', layout='wide', page_icon=':stethoscope:', initial_sidebar_state='collapsed')
@@ -82,9 +83,9 @@ with st.sidebar:
         
     st.divider()
 
-    st.info("GPT-4o-mini performs well for other options. For more complex synthesis, change the RAG model to GPT-4o or to Claude-3.5 Sonnet.")
+    st.info("GPT-4o-mini performs well for other options. For more complex synthesis, stay with GPT-4o or use Claude-3.5 Sonnet.")
     
-    rag_model_choice = st.radio("RAG Model Options", ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet",], help = "Select the RAG model to use for the AI responses.")
+    rag_model_choice = st.radio("RAG Model Options", ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet",], index=1, help = "Select the RAG model to use for the AI responses.")
     if rag_model_choice == "GPT-4o":
         st.write("GPT-4o model selected.")
         rag_model = "gpt-4o"
@@ -108,6 +109,36 @@ with st.sidebar:
         rag_key = api_key
         
     elif rag_model_choice == "o1-preview":
+        st.write("o1-preview model selected.")
+        rag_model = "o1-preview"
+        provider = "openai"
+        rag_key = api_key
+        
+        
+    eval_model_choice = st.radio("Evaluation Model Options", ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet",], index=1, help = "Select the RAG model to use for the AI responses.")
+    if eval_model_choice == "GPT-4o":
+        st.write("GPT-4o model selected.")
+        rag_model = "gpt-4o"
+        provider = "openai"
+        rag_key = api_key
+    elif eval_model_choice == "Claude-3.5 Sonnet":   
+        st.write("Claude-3-5-sonnet-20240620 model selected.")
+        rag_model = "claude-3-5-sonnet-20240620"
+        provider = "anthropic" 
+        rag_key = api_key_anthropic
+    elif eval_model_choice == "GPT-4o-mini":
+        st.write("GPT-4o-mini model selected.")
+        rag_model = "gpt-4o-mini"
+        provider = "openai"
+        rag_key = api_key
+        
+    elif eval_model_choice == "o1-mini":
+        st.write("o1-mini model selected.")
+        rag_model = "o1-mini"
+        provider = "openai"
+        rag_key = api_key
+        
+    elif eval_model_choice == "o1-preview":
         st.write("o1-preview model selected.")
         rag_model = "o1-preview"
         provider = "openai"
@@ -960,6 +991,20 @@ def main():
 
         with col2: 
             if st.session_state.rag_response:
+                
+                if st.button("Assess Response Accuracy"):
+                    prior_context = f'User question: {original_query} Evidence provided: {st.session_state.source_chunks}'
+                    evaluation_prompt = evaluate_response_prompt.format(prior_context=prior_context, prior_answer=st.session_state.rag_response)
+                    try:
+                        confirm_response_messages = [{'role': 'system', 'content': "You are an expert AI evaluator who proceeds step by step and double-checks all your answers since lives may depend on your evaluations."},
+                                                    {'role': 'user', 'content': evaluation_prompt}]
+                        confirm_response = create_chat_completion(messages=confirm_response_messages, temperature=0.3)
+                        st.write(confirm_response.choices[0].message.content)
+
+                    except Exception as e:
+                        st.error(f"Error during OpenAI call: {e}")
+                        return
+                    
                 if st.button("Ask 3 AI Experts"):
                     prelim_response = st.session_state.rag_response + st.session_state.source_chunks
                     
