@@ -470,8 +470,8 @@ def refine_output(data):
             all_sources += f"[Link to source]({info['url']})\n\n"
         
         cleaned_text = clean_text(text)
-        # Limit text to first 500 characters
-        truncated_text = cleaned_text[:500] + "..." if len(cleaned_text) > 500 else cleaned_text
+        # Limit text to first 3000 characters
+        truncated_text = cleaned_text[:3000] + "..." if len(cleaned_text) >3000 else cleaned_text
         all_sources += f"{truncated_text}\n\n"
         
         if "Table" in cleaned_text:

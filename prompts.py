@@ -1,5 +1,6 @@
 evaluate_response_prompt ="""#### Instructions:
-Carefully evaluate the provided LLM-generated response to a user question, ensuring that the content directly aligns with the provided source materials. Your evaluation should cover both factual accuracy and the potential presence of bias.
+Carefully evaluate the provided LLM-generated response to a user question with a focus on the section entitled, "
+Consensus View Available from Context", ensuring that the content directly aligns with the provided source materials. Your evaluation should cover both factual accuracy and the potential presence of bias.
 
 #### Provided Context:  
 {prior_context}
@@ -11,7 +12,7 @@ Carefully evaluate the provided LLM-generated response to a user question, ensur
 ### Evaluation Criteria:
 
 1. **Source Validation:**
-   - Identify whether all content in the answer is directly supported by the provided source materials.
+   - Identify whether all content in the Consensus View from Context section is directly supported by the provided source materials.
    - Call out any content that is not corroborated by the sources or appears to be unsupported.
 
 2. **Accuracy and Recency:**
@@ -39,11 +40,13 @@ Carefully evaluate the provided LLM-generated response to a user question, ensur
      - 5: Extreme bias, highly problematic content
 
 #### Rationale:
-- Provide detailed reasoning for the ratings given, explaining any discrepancies between the provided sources and the LLM-generated content, as well as any identified biases.
+- Provide detailed reasoning for the ratings given, explaining any discrepancies between the provided sources and the LLM-generated content in the Consensus View from Context section, 
+as well as any identified biases.
 
 #### Scores:
-- **Source Support Score:** [Generated score]
-- **Bias Presence Score:** [Generated score]
+- **Consenus View Source Support Score:** [Generated score]
+- **Overall Bias Presence Score:** [Generated score]
+- **Additional Overall Comments:** [Any additional insights or comments on the response]
 """
 
 improve_image_prompt = """Imagine you're crafting a prompt for the DALL·E 3, a leading-edge Language Learning Model designed for generating intricate and high-fidelity images. Your goal is to enrich detail and specificity in the prompt, predicting and embracing potential user needs to ensure the output is not just accurate but breathtakingly vivid. Consider these steps to enhance your prompt:
@@ -451,20 +454,21 @@ prepare_rag_prompt = """Context: You receive text sections from reliable interne
 
 rag_prompt = """Step 1: Retrieve context for semantic search on the user query: {xml_query}
 Step 2: Structure your response as follows answering based on the retrieved context and today's date, {current_datetime}. Users are health professionals, so use technical terms and avoid disclaimers. 
-If the question cannot be answered with the given context, state: "Question not answerable with current context." When finalizing your response, follow this format:
+When finalizing your response, follow this format:
 
-1. **Consensus View Available from Context:**
-   - Summarize the current consensus or most widely accepted view based on the provided context.
+1. **Consensus Available from Context:**
+   - If the question cannot be answered with the provided context, state: "Question not answerable with current context."
    - Include specific statistics, guidelines, or recommendations if available; your goal is to avoid asking users to search for more information.
    - Mention the strength of evidence supporting this view (e.g., multiple randomized controlled trials, systematic reviews, expert consensus).
 
-2. **Alternative Approaches or Emerging Evidence:**
+2. **AI Perspective:**
+   - Summarize the current consensus from the perspective of an expert in the field.
    - Present any alternative approaches or emerging evidence that challenges or complements the consensus view.
    - Provide specific details about these alternatives, including study designs, sample sizes, and key findings.
    - Explain the potential implications of these alternatives for clinical practice or understanding of the topic.
 
 3. **Contextual Considerations:**
-   - Discuss any important caveats, limitations, or special considerations related to both the consensus view and alternative approaches.
+   - Discuss any important caveats, limitations, or special considerations related to both the consensus from the context and AI perspective.
    - Include patient-specific factors, potential risks, or implementation challenges that may influence decision-making.
 
 4. **Practical Application:**
