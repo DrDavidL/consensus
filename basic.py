@@ -643,7 +643,6 @@ def main():
                 "config": {
                     "model": rag_model,
                     "temperature": 0.5,
-                    "top_p": 1,
                     "stream": False,
                     "api_key": rag_key,
                 },
