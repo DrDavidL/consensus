@@ -535,7 +535,7 @@ def create_chat_completion(
     stream=False,
     include_usage=False,
     temperature=1,
-    top_p=1,
+    # top_p=1,
     tools=None,
     tool_choice="none",
     user=None
