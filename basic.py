@@ -558,7 +558,7 @@ def create_chat_completion(
         "stop": stop,
         "stream": stream,
         "temperature": temperature,
-        "top_p": top_p,
+        # "top_p": top_p,
         "user": user
     }
 
