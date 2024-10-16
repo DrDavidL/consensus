@@ -456,8 +456,8 @@ rag_prompt = """Step 1: Retrieve context for semantic search on the user query: 
 Step 2: Structure your response as follows answering based on the retrieved context and today's date, {current_datetime}. Users are health professionals, so use technical terms and avoid disclaimers. 
 When finalizing your response, follow this format:
 
-1. **Consensus Available from Context:**
-   - If the question cannot be answered with the provided context, state: "Question not answerable with current context."
+1. **Consensus Available from Context:** (Only use information from the context!)
+   - If the question cannot be answered with the provided context, state: "Question not answerable with retrieved context."
    - Include specific statistics, guidelines, or recommendations if available; your goal is to avoid asking users to search for more information.
    - Mention the strength of evidence supporting this view (e.g., multiple randomized controlled trials, systematic reviews, expert consensus).
 

@@ -475,7 +475,7 @@ def refine_output(data):
         all_sources += f"{truncated_text}\n\n"
         
         if "Table" in cleaned_text:
-            all_sources += "This source contains tabular data. Expand to view.\n\n"
+            all_sources += "This source contained tabular data.\n\n"
         
         all_sources += "---\n\n"  # Separator between sources
     
