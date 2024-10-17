@@ -877,7 +877,7 @@ def main():
                     with st.spinner("Optimizing display of abstracts..."):
                     
                         with st.expander("View PubMed Abstracts Added to Knowledge Base"):
-                            st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")
+                            # st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")
                             # st.write(f'**Search Strategy:** {pubmed_search_terms}')
                             pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
                             # st.write("[View PubMed Search Results]({pubmed_link})")
