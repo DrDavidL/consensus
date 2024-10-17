@@ -908,12 +908,15 @@ def main():
                         st.session_state.urls = [result.url for result in search_response.results]
 
                 with st.expander("View Internet Results Added to Knowledge Base"):
-                    st.write(f'**Search Strategy:** {google_search_terms}')
+                    # st.write(f'**Search Strategy:** {google_search_terms}')
                     # if st.session_state.chosen_domain != "medical":
                     #     st.write(f'Domains used: {st.session_state.chosen_domain}')
-                    for url in st.session_state.urls:
-                        # url = url.replace('<END OF SITE>', '')
-                        st.markdown(url)
+                    # for url in st.session_state.urls:
+                    #     # url = url.replace('<END OF SITE>', '')
+                    #     st.markdown(url)
+                    for snippet in st.session_state.snippets:
+                        snippet = snippet.replace('<END OF SITE>', '')
+                        st.markdown(snippet)
                 
                 # Initialize a list to store blocked sites
                 blocked_sites = []
