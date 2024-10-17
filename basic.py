@@ -145,13 +145,13 @@ with st.sidebar:
         rag_key = api_key
 
     st.divider()
-    experts_model_choice = st.toggle("3 AI Experts Model: Use GPT-4o", help = "Toggle to use GPT-4o model for expert responses; otherwise, 4o-mini.")
+    experts_model_choice = st.toggle("3 AI Experts Model: Use GPT-4o-mini", help = "Toggle to use GPT-4o model for expert responses; otherwise, 4o-mini.")
     if experts_model_choice:
         st.write("GPT-4o model selected.")
-        experts_model = "gpt-4o"
+        experts_model = "gpt-4o-mini"
     else:
         st.write("GPT-4o-mini model selected.")
-        experts_model = "gpt-4o-mini"
+        experts_model = "gpt-4o"
         
 
 
