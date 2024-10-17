@@ -881,9 +881,8 @@ def main():
                             # st.write(f'**Search Strategy:** {pubmed_search_terms}')
                             pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
                             # st.write("[View PubMed Search Results]({pubmed_link})")
-                            
-                            with st.popover("PubMed Search Terms"):
-                                st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                            st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                            with st.popover("PubMed Search Terms"):                                
                                 st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
                             # st.write(f'Article Types (may change in left sidebar): {search_type}')
                             for article in articles:
@@ -1070,8 +1069,8 @@ def main():
                         pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
                             # st.write("[View PubMed Search Results]({pubmed_link})")
                         # st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
-                        with st.popover("PubMed Search Terms"):
-                            st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                        st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                        with st.popover("PubMed Search Terms"):                
                             st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
                         for article in st.session_state.articles:
                             st.markdown(f"### [{article['title']}]({article['link']})")
