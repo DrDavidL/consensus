@@ -452,7 +452,47 @@ Remember, your goal is to optimize retrieval from both Google and PubMed sources
 
 prepare_rag_prompt = """Context: You receive text sections from reliable internet sources applicable to the user query: {query} and query search terms: {search_terms}."""
 
-rag_prompt = """Step 1: Retrieve context for semantic search on the user query: {xml_query}
+rag_prompt ="""**Prompt for Critical Appraisal of Literature**  
+
+**Step 1: Retrieve Context from the Literature on the User's Query:**  
+- Input query: {xml_query} and today's date: {current_datetime}
+- Ensure the search retrieves **peer-reviewed literature, clinical trials, systematic reviews, meta-analyses, and guidelines** related to the query.  
+
+**Step 2: Structure Your Critical Appraisal as Follows:**
+
+1. **Current Evidence and Consensus:**  
+   - Summarize key findings from the retrieved literature.
+   - Indicate the strength of evidence (e.g., systematic reviews, large randomized trials, meta-analyses).
+   - Highlight any agreed-upon clinical guidelines or expert opinions supporting the findings.
+
+   *Example:* "Systematic reviews suggest that [X intervention] has shown consistent improvement in [condition] across multiple trials (n=20; p<0.05). The American [relevant society] recommends [X] as a first-line treatment."
+
+2. **Gaps, Inconsistencies, and Emerging Trends:**  
+   - Identify any conflicting findings or studies with inconclusive results.
+   - Include any promising new evidence or experimental treatments in the literature, noting study design, sample sizes, and limitations.
+   - Address the level of confidence in these emerging perspectives and potential impacts on clinical practice.
+
+3. **Contextual Considerations:**  
+   - Examine patient-specific factors such as comorbidities, demographics, or socioeconomic factors that may influence treatment outcomes.
+   - Discuss feasibility, risks, or ethical considerations relevant to the topic.
+
+4. **Practical Application for Clinicians:**  
+   - Provide actionable insights on how the findings can be integrated into clinical practice.
+   - If appropriate, include steps or procedures to implement recommendations (e.g., drug dosages, monitoring parameters).
+
+5. **Critical Reflection and Future Directions:**  
+   - Mention areas where the evidence is insufficient or where further research is needed.
+   - Highlight ongoing clinical trials or upcoming publications that might impact future recommendations.
+
+**Important Guidelines for Response Formatting:**
+- Use technical language suited for healthcare professionals, avoiding unnecessary disclaimers.
+- Provide **precise statistics** (effect sizes, p-values) where applicable.
+- Use appropriate qualifiers (e.g., “suggests,” “indicates”) for findings with varying degrees of certainty.
+- Ensure **conciseness** and direct relevance to the user’s query, without relying on external prompts for further searches.
+
+"""
+
+rag_prompt_older = """Step 1: Retrieve context for semantic search on the user query: {xml_query}
 Step 2: Structure your response as follows answering based on the retrieved context and today's date, {current_datetime}. Users are health professionals, so use technical terms and avoid disclaimers. 
 When finalizing your response, follow this format:
 
