@@ -947,7 +947,7 @@ def main():
                                                       {'role': 'user', 'content': original_query}]
                         query_for_rag = create_chat_completion(prepare_rag_query_messages, model=rag_question_model, temperature=0.3, )
                         updated_rag_query = query_for_rag.choices[0].message.content
-                        updated_rag_query += f'Use the following snippets: {st.session_state.snippets} AND what you can retrieve for your response.'
+                        updated_rag_query += f'Use the following snippets: {st.session_state.snippets}, abstracts: {st.session_state.articles} AND what you can retrieve for your response.'
                         # st.write(f"**Query for RAG:** {query_for_rag.choices[0].message.content}")
                         # Update the query to include the current date and time
                         # answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible. If math calculations are required, formulate and execute python code to ensure accurate calculations. User query: {original_query}",
@@ -995,7 +995,7 @@ def main():
             if st.session_state.rag_response:
                 
                 if st.button("Assess Response Accuracy"):
-                    prior_context = f'User question: {original_query} Evidence provided:{st.session_state.snippets} and {st.session_state.source_chunks}'
+                    prior_context = f'User question: {original_query} Evidence provided:{st.session_state.snippets}, {st.session_state.articles}, and {st.session_state.source_chunks}'
                     evaluation_prompt = evaluate_response_prompt.format(prior_context=prior_context, prior_answer=st.session_state.rag_response)
                     try:
                         confirm_response_messages = [{'role': 'system', 'content': "You are an expert AI evaluator who proceeds step by step and double-checks all your answers since lives may depend on your evaluations."},
