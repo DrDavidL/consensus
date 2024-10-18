@@ -1,4 +1,75 @@
 evaluate_response_prompt ="""#### Instructions:
+Analyze the provided LLM-generated response to identify **unsupported assertions** within the "Current Evidence and Consensus" section. For each unsupported assertion, generate a **Google Scholar search link** using a well-formulated query to investigate the claim.  
+
+#### Provided Context:  
+{prior_context}
+
+#### LLM-Generated Answer:  
+{prior_answer}
+
+---
+
+### **Evaluation Criteria:**
+
+1. **Assertion Validation:**
+   - Review each assertion within the "Current Evidence and Consensus" section.
+   - Identify any claims that lack direct support from the provided source material.
+   - Ensure that claims align with factual information in the prior context.
+
+2. **Google Scholar Links for Investigation:**
+   - For each unsupported assertion, generate a **Google Scholar search link** using this format:
+
+     ```
+     https://scholar.google.com/scholar?hl=en&as_sdt=0%2C14&q=([keyword1]+AND+[keyword2])+AND+(systematic+reviews+OR+meta-analyses+OR+randomized+trials)&btnG=
+     ```
+   - Replace `[keyword1]` and `[keyword2]` with relevant terms extracted from the unsupported assertion to ensure precise search results.
+   - Example:
+     - Unsupported Assertion: "Disc replacement surgery has a higher success rate than fusion in young patients."
+     - **Google Scholar Search Link:**  
+       [Disc replacement AND fusion systematic reviews OR meta-analyses OR randomized trials](https://scholar.google.com/scholar?hl=en&as_sdt=0%2C14&q=(disc+replacement+AND+fusion)+AND+(systematic+reviews+OR+meta-analyses+OR+randomized+trials)&btnG=)
+
+3. **Accuracy and Recency:**
+   - Verify the relevance and timeliness of referenced evidence, avoiding outdated or irrelevant sources.
+
+4. **Bias Detection:**
+   - Identify biased language, favoritism, or overgeneralizations (e.g., demographic or gender bias).
+   - Ensure a fair, inclusive, and balanced tone in the assertions and evidence cited.
+
+---
+
+### **Evaluation Report Structure:**
+
+1. **Unsupported Assertions List:**  
+   - **Assertion 1:** [Insert unsupported claim]  
+     - **Google Scholar Search Link:** [Insert search link based on provided query format]  
+   - **Assertion 2:** [Insert unsupported claim]  
+     - **Google Scholar Search Link:** [Insert search link]  
+
+2. **Rating Metrics:**
+   - **Source Support:** Rate alignment with source material on a 1-5 scale:  
+     - 1: All information sourced.
+     - 2: Minor unsupported claims.
+     - 3: Moderate reliance on unsupported content.
+     - 4: Significant unsupported content.
+     - 5: Substantial content not backed by sources.
+
+   - **Bias Presence:** Rate the degree of bias (1-5 scale):  
+     - 1: No detectable bias.
+     - 2: Subtle bias.
+     - 3: Moderate bias, occasionally noticeable.
+     - 4: Significant bias, clearly evident.
+     - 5: Extreme bias, problematic content.
+
+3. **Rationale:**  
+   - Provide detailed reasoning for scores, including any discrepancies between sources and assertions.  
+   - Describe detected biases and offer suggestions for improvement.
+
+4. **Additional Comments:**  
+   - Highlight patterns or areas requiring further investigation.
+
+"""
+
+evaluate_response_prompt_old ="""#### Instructions:
 Carefully evaluate the provided LLM-generated response to a user question with a focus on the section entitled, "
 Consensus View Available from Context", ensuring that the content directly aligns with the provided source materials. Your evaluation should cover both factual accuracy and the potential presence of bias.
 
