@@ -4,6 +4,9 @@ import re
 import tempfile
 from datetime import datetime, timedelta
 
+from docx import Document
+from io import BytesIO
+
 import aiohttp
 import requests
 import streamlit as st
@@ -238,7 +241,22 @@ def replace_first_user_message(messages, new_message):
             messages[i] = new_message
             break
 
-
+def markdown_to_word(markdown_text):
+    """Convert markdown text to a Word document."""
+    doc = Document()
+    lines = markdown_text.split("\n")
+    for line in lines:
+        if line.startswith("# "):  # H1
+            doc.add_heading(line[2:], level=1)
+        elif line.startswith("## "):  # H2
+            doc.add_heading(line[3:], level=2)
+        elif line.startswith("### "):  # H3
+            doc.add_heading(line[4:], level=3)
+        elif line.startswith("- "):  # Bullet points
+            doc.add_paragraph(line[2:], style="List Bullet")
+        else:  # Normal text
+            doc.add_paragraph(line)
+    return doc
 
 async def extract_abstract_from_xml(xml_data: str, pmid: str) -> str:
     try:
@@ -1159,6 +1177,18 @@ def main():
                 with container1:
                     st.info("Preliminary Response")
                     st.markdown(st.session_state.rag_response)
+                    if st.button("Create Word Document"):
+                        doc = markdown_to_word(st.session_state.rag_response)
+                        buffer = BytesIO()
+                        doc.save(buffer)
+                        buffer.seek(0)
+
+                        st.download_button(
+                            label="Download Word Document",
+                            data=buffer,
+                            file_name="prelim_response.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
                     with st.expander("View Source Excerpts"):
                         st.markdown(st.session_state.source_chunks)
 
@@ -1260,6 +1290,18 @@ def main():
                     container1 = st.container(border=True)
                     with container1:
                         st.markdown(st.session_state.rag_response)
+                        if st.button("Create Word File"):
+                            doc = markdown_to_word(st.session_state.rag_response)
+                            buffer = BytesIO()
+                            doc.save(buffer)
+                            buffer.seek(0)
+
+                            st.download_button(
+                                label="Download Word File",
+                                data=buffer,
+                                file_name="prelim_response.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
                         with st.expander("View Source Excerpts"):
                             st.markdown(st.session_state.source_chunks)
                         
@@ -1274,13 +1316,51 @@ def main():
                     with st.expander(f'AI {st.session_state.experts[0]} Perspective'):
                         st.write(st.session_state.expert_answers[0]['choices'][0]['message']['content'])
                         st.session_state.messages1.append({"role": "assistant", "content": st.session_state.expert_answers[0]['choices'][0]['message']['content']})
+                        if st.button("Create Word File for AI Expert 1"):
+                            doc = markdown_to_word(st.session_state.rag_response)
+                            buffer = BytesIO()
+                            doc.save(buffer)
+                            buffer.seek(0)
+
+                            st.download_button(
+                                label="Download Word File for AI Expert 1",
+                                data=buffer,
+                                file_name="AI_expert_1.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+                        # with st.expander("View Source Excerpts"):
+                        #     st.markdown(st.session_state.source_chunks)
                     with st.expander(f'AI {st.session_state.experts[1]} Perspective'):
                         st.write(st.session_state.expert_answers[1]['choices'][0]['message']['content'])
                         st.session_state.messages2.append({"role": "assistant", "content": st.session_state.expert_answers[1]['choices'][0]['message']['content']})
+                        if st.button("Create Word File for AI Expert 2"):
+                            doc = markdown_to_word(st.session_state.rag_response)
+                            buffer = BytesIO()
+                            doc.save(buffer)
+                            buffer.seek(0)
+
+                            st.download_button(
+                                label="Download Word File for AI Expert 2",
+                                data=buffer,
+                                file_name="AI_expert_2.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+                    
                     with st.expander(f'AI {st.session_state.experts[2]} Perspective'):
                         st.write(st.session_state.expert_answers[2]['choices'][0]['message']['content'])
                         st.session_state.messages3.append({"role": "assistant", "content": st.session_state.expert_answers[2]['choices'][0]['message']['content']})
-                    
+                        if st.button("Create Word File for AI Expert 3"):
+                            doc = markdown_to_word(st.session_state.rag_response)
+                            buffer = BytesIO()
+                            doc.save(buffer)
+                            buffer.seek(0)
+
+                            st.download_button(
+                                label="Download Word File for AI Expert 3",
+                                data=buffer,
+                                file_name="AI_expert_3.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
 
 
         
@@ -1348,6 +1428,18 @@ def main():
                             full_conversation += f"{message['role']}: {message['content']}\n\n"
                     full_conversation = full_conversation.replace("assistant:", "")
                     st.write(full_conversation)
+                    if st.button("Create Word File for followup conversation"):
+                        doc = markdown_to_word(st.session_state.rag_response)
+                        buffer = BytesIO()
+                        doc.save(buffer)
+                        buffer.seek(0)
+
+                        st.download_button(
+                            label="Download Word File for followup conversation",
+                            data=buffer,
+                            file_name="followup_convo.docx",
+                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                        )
 
 
 if __name__ == '__main__':
