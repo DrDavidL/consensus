@@ -51,6 +51,60 @@ api_key = st.secrets["OPENAI_API_KEY"]
 api_key_anthropic = st.secrets["ANTHROPIC_API_KEY"]  # Anthropic API key
 exa = Exa(st.secrets["EXA_API_KEY"])  # Exa.ai API key
 
+if "snippets" not in st.session_state:
+    st.session_state["snippets"] = []
+if "urls" not in st.session_state:
+    st.session_state["urls"] = []
+if "expert1_response" not in st.session_state:
+    st.session_state["expert1_response"] = ""
+if "expert2_response" not in st.session_state:
+    st.session_state["expert2_response"] = ""
+if "expert3_response" not in st.session_state:  
+    st.session_state["expert3_response"] = ""
+if "sources" not in st.session_state:
+    st.session_state["sources"] = []
+if "rag_response" not in st.session_state:
+    st.session_state["rag_response"] = ""
+
+if "citation_data" not in st.session_state:
+    st.session_state["citation_data"] = []
+    
+if "source_chunks" not in st.session_state:
+    st.session_state.source_chunks = ''
+
+if "experts" not in st.session_state:
+    st.session_state.experts = []
+    
+if "messages1" not in st.session_state:
+    st.session_state.messages1 = []
+    
+if "messages2" not in st.session_state:
+    st.session_state.messages2 = []
+
+if "messages3" not in st.session_state:
+    st.session_state.messages3 = []
+    
+if "followup_messages" not in st.session_state:
+    st.session_state.followup_messages = []
+    
+if "expert_number" not in st.session_state:
+    st.session_state.expert_number = 0
+    
+if "expert_answers" not in st.session_state:
+    st.session_state.expert_answers = []
+    
+if "original_question" not in st.session_state:
+    st.session_state.original_question = ""
+
+if "chosen_domain" not in st.session_state:
+    st.session_state.chosen_domain = ""
+    
+if "articles" not in st.session_state:
+    st.session_state.articles = []
+    
+if "pubmed_search_terms" not in st.session_state:
+    st.session_state.pubmed_search_terms = ""
+
 with st.sidebar:
 
     topic_model_choice = st.toggle("Subject Area: Use GPT-4o", help = "Toggle to use GPT-4o model for determining if medical; otherwise, 4o-mini.")
@@ -61,6 +115,27 @@ with st.sidebar:
         st.write("GPT-4o-mini model selected.")
         topic_model = "gpt-4o-mini"
         
+    st.divider()
+    
+    search_type = "all"
+
+    
+    years_back = st.slider("Years Back for PubMed Search", min_value=1, max_value=10, value=4, step=1, help = "Set the number of years back to search PubMed.")
+    
+    
+    st.divider()
+    
+    max_results = st.slider("Number of Abstracts to Review", min_value=3, max_value=30, value=15, step=1, help = "Set the number of abstracts to review.")
+  
+    
+    st.divider()
+    
+    filter_relevance = st.toggle("Filter Relevance of PubMed searching", value = True, help = "Toggle to deselect.")
+    if filter_relevance:
+        relevance_threshold = st.slider("Relevance Threshold", min_value=0.3, max_value=1.0, value=0.5, step=0.05, help = "Set the minimum relevance score to consider an item relevant.")
+    else:
+        relevance_threshold = 0.75
+        st.write("Top sources will be added to the database regardless.")    
     st.divider()
     
     rag_question_model_choice = st.toggle("RAG Question Wording Model: Use GPT-4o", help = "Toggle to use GPT-4o model for RAG; otherwise, 4o-mini.")
@@ -219,7 +294,158 @@ async def fetch_article_details(session: aiohttp.ClientSession, id: str, details
             print(f"Error fetching article details for ID {id}: {e}")
             return id, {}, ""
 
-async def pubmed_abstracts(search_terms: str, search_type: str = "all", max_results: int = 5, years_back: int = 3) -> Tuple[List[Dict[str, str]], List[str]]:
+def filter_items_with_chat_completion(items, search_terms=st.session_state.original_question, threshold=relevance_threshold, item_type="abstract"):
+    """
+    Filters a list of items (articles or URLs) based on relevance using the chat completion function.
+
+    Parameters:
+        items (list): List of items to filter.
+        search_terms (str): The original search query.
+        threshold (float): Minimum relevance score to consider an item relevant.
+        item_type (str): Type of item ("abstract" or "url").
+
+    Returns:
+        list: Filtered list of relevant items.
+    """
+    filtered_items = []
+    for item in items:
+        content = item["abstract"] if item_type == "abstract" else item["url"]
+        messages = [
+            {'role': 'system', 'content': "You are an assistant evaluating relevance of items to a query."},
+            {'role': 'user', 'content': f"Query: {search_terms}\nItem Content: {content}\nCarefully examine the title and abstract to respond with a relevance score between 0 and 1 reflecting the likelihood the query is effectively answered by the source."}
+        ]
+        try:
+            response = create_chat_completion(messages, model= "gpt-4o-mini", temperature=0.3)
+            relevance_score = float(response.choices[0].message.content.strip())
+            if relevance_score >= threshold:
+                filtered_items.append(item)
+        except Exception as e:
+            logger.error(f"Error filtering item: {e}")
+            continue
+
+    return filtered_items
+
+
+async def pubmed_abstracts(
+    search_terms: str,
+    search_type: str = "all",
+    max_results: int = max_results,
+    years_back: int = years_back,
+    filter_relevance: bool = filter_relevance,
+    relevance_threshold: float = relevance_threshold
+) -> Tuple[List[Dict[str, str]], List[Dict[str, str]]]:
+    """
+    Fetch PubMed abstracts and associated URLs, with optional relevance filtering.
+
+    Parameters:
+        search_terms (str): PubMed search query.
+        search_type (str): Type of search (default "all").
+        max_results (int): Maximum number of results to fetch.
+        years_back (int): Number of years back to include in the search.
+        filter_relevance (bool): Whether to filter results by relevance.
+        relevance_threshold (float): Minimum relevance score for filtering.
+
+    Returns:
+        Tuple[List[Dict[str, str]], List[Dict[str, str]]]: Filtered articles and URLs.
+    """
+    current_year = datetime.now().year
+    start_year = current_year - years_back
+    search_query = f"{search_terms}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
+
+    # url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
+
+    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=pub+date&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
+
+    
+    async with aiohttp.ClientSession() as session:
+        try:
+            async with session.get(url) as response:
+                response.raise_for_status()
+                data = await response.json()
+
+                if 'esearchresult' not in data or 'count' not in data['esearchresult']:
+                    st.error("Unexpected response format from PubMed API")
+                    return [], []
+
+                ids = data['esearchresult'].get('idlist', [])
+                if not ids:
+                    st.write("No results found.")
+                    return [], []
+
+            # Fetch details and abstracts
+            articles = []
+            urls = []
+            semaphore = asyncio.Semaphore(5)
+            tasks = []
+
+            for id in ids:
+                details_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={id}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
+                abstracts_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={id}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
+                tasks.append(fetch_article_details(session, id, details_url, abstracts_url, semaphore))
+
+            results = await asyncio.gather(*tasks)
+
+            filtered_articles = []
+
+            for id, details_data, abstracts_data in results:
+                if 'result' in details_data and str(id) in details_data['result']:
+                    article = details_data['result'][str(id)]
+                    year = article['pubdate'].split(" ")[0]
+                    if year.isdigit():
+                        abstract = await extract_abstract_from_xml(abstracts_data, id)
+                        article_url = f"https://pubmed.ncbi.nlm.nih.gov/{id}"
+                        if abstract.strip() and abstract != "No abstract available":
+                            # Append all articles and URLs for potential filtering
+                            filtered_articles.append({
+                                'id': id,
+                                'title': article['title'],
+                                'year': year,
+                                'abstract': abstract.strip(),
+                                'link': article_url  # Link URL to the abstract
+                            })
+            print(f"Filtered articles: {filtered_articles}")
+            # Filter articles for relevance if specified
+            if filter_relevance:
+                print(f"Filtering articles with relevance threshold {relevance_threshold}")
+                relevant_articles = []
+                for article in filtered_articles:
+                    messages = [
+                        {'role': 'system', 'content': "You are an assistant evaluating relevance of abstracts to a query."},
+                        {'role': 'user', 'content': f"Query: {st.session_state.original_question}\nAbstract: {article['abstract']}\nRespond only with a relevance score between 0 and 1 representing the likelihood the answer is found in the article. Sample response: 0.75"}
+                    ]
+                    
+                    with st.spinner("Filtering PubMed articles for question relevance"):
+                    
+                        try:
+                            response = create_chat_completion(messages, model = "gpt-4o-mini", temperature=0.3)
+                            relevance_score = float(response.choices[0].message.content.strip())
+                            if relevance_score >= relevance_threshold:
+                                relevant_articles.append(article)
+                        except Exception as e:
+                            logger.error(f"Error filtering article: {e}")
+                            continue
+                
+                # Separate filtered articles and URLs
+                articles = [{'id': a['id'], 'title': a['title'], 'link': a['link'], 'year': a['year'], 'abstract': a['abstract']} for a in relevant_articles]
+                # urls = [{'id': a['id'], 'link': a['link']} for a in relevant_articles]
+            else:
+                # If no filtering, include all
+                articles = [{'id': a['id'], 'title': a['title'], 'link': a['link'], 'year': a['year'], 'abstract': a['abstract']} for a in filtered_articles]
+                # urls = [{'id': a['id'], 'link': a['link']} for a in filtered_articles]
+
+
+
+        except aiohttp.ClientError as e:
+            st.error(f"Error connecting to PubMed API: {e}")
+            return [], []
+        except Exception as e:
+            st.error(f"An unexpected error occurred: {e}")
+            return [], []
+
+    return articles[:max_results]
+
+
+async def pubmed_abstracts_azure(search_terms: str, search_type: str = "all", max_results: int = 5, years_back: int = 3) -> Tuple[List[Dict[str, str]], List[str]]:
     current_year = datetime.now().year
     start_year = current_year - years_back
     search_query = f"{search_terms}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
@@ -662,7 +888,7 @@ def main():
             site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=8, step=1)
             internet_search_provider = st.radio("Internet search provider:", options=["Google", "Exa"], horizontal = True, help = "Only specific Google domains are used for retrieving current Medical or General Knowledge. Exa.ai is a new type of search tool that predicts relevant sites; domain filtering not yet added here.")
             if internet_search_provider == "Google":
-                st.info("PubMed options and web domains used for medical questions.")
+                st.info("Web domains used for medical questions.")
                 edited_medical_domains = st.text_area("Edit domains (maintain format pattern):", medical_domains, height=200)
                 # edited_reliable_domains = st.text_area("Edit domains (maintain format pattern):", reliable_domains, height=200)
 
@@ -671,11 +897,7 @@ def main():
             #     restrict_domains = st.radio("Restrict Internet search domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True, help = "Edit Google search domains on left sidebar. Select 'Medical' for pre-set medical site (you may edit!), 'General Knowledge' for generally reliable sources (you may edit!), 'Full Internet' (uses standard Google ranking), or 'No Internet' to skip updates to AI from internet sources when answering.")
 
 
-            
-            st.write("PubMed Options (Medical Domain Searches Only):")
-            search_type = "all"
-            max_results = st.number_input("Max results:", min_value=1, max_value=30, value=8)
-            years_back = st.number_input("Number of years back:", min_value=1, max_value=50, value=3)    
+   
             
         st.info("""This app interprets a user query and retrieves content from selected internet domains (including PubMed if applicable) for an initial answer and then asks AI personas their 
         opinions on the topic after providing them with updated content, too. Approaches shown to improve outputs like [chain of thought](https://arxiv.org/abs/2201.11903), 
@@ -695,59 +917,7 @@ def main():
     
     col1, col2 = st.columns([1, 1])
 
-    if "snippets" not in st.session_state:
-        st.session_state["snippets"] = []
-    if "urls" not in st.session_state:
-        st.session_state["urls"] = []
-    if "expert1_response" not in st.session_state:
-        st.session_state["expert1_response"] = ""
-    if "expert2_response" not in st.session_state:
-        st.session_state["expert2_response"] = ""
-    if "expert3_response" not in st.session_state:  
-        st.session_state["expert3_response"] = ""
-    if "sources" not in st.session_state:
-        st.session_state["sources"] = []
-    if "rag_response" not in st.session_state:
-        st.session_state["rag_response"] = ""
-    
-    if "citation_data" not in st.session_state:
-        st.session_state["citation_data"] = []
-        
-    if "source_chunks" not in st.session_state:
-        st.session_state.source_chunks = ''
-    
-    if "experts" not in st.session_state:
-        st.session_state.experts = []
-        
-    if "messages1" not in st.session_state:
-        st.session_state.messages1 = []
-        
-    if "messages2" not in st.session_state:
-        st.session_state.messages2 = []
-    
-    if "messages3" not in st.session_state:
-        st.session_state.messages3 = []
-        
-    if "followup_messages" not in st.session_state:
-        st.session_state.followup_messages = []
-        
-    if "expert_number" not in st.session_state:
-        st.session_state.expert_number = 0
-        
-    if "expert_answers" not in st.session_state:
-        st.session_state.expert_answers = []
-        
-    if "original_question" not in st.session_state:
-        st.session_state.original_question = ""
-    
-    if "chosen_domain" not in st.session_state:
-        st.session_state.chosen_domain = ""
-        
-    if "articles" not in st.session_state:
-        st.session_state.articles = []
-        
-    if "pubmed_search_terms" not in st.session_state:
-        st.session_state.pubmed_search_terms = ""
+
         
     
     if check_password():
@@ -838,30 +1008,30 @@ def main():
                     # st.write(f'Here are the pubmed terms: {pubmed_search_terms}')
                     st.session_state.pubmed_search_terms = pubmed_search_terms
                     with st.spinner(f'Searching PubMed for "{pubmed_search_terms}"...'):
-                        articles, urls = asyncio.run(pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back))
-                    st.session_state.articles = articles
+                        articles = asyncio.run(pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back))
                     st.session_state.articles = articles
                     with st.spinner("Adding PubMed abstracts to the knowledge base..."):
                         if articles:
-                            try:
-                                app.add(str(articles), data_type='text')
-                            except Exception as e:
-                                logger.error(f"Error adding articles: {str(e)}")
-                                st.error("An error occurred while processing the articles. Please try again.")
-
-                        if urls:
-                            successful_urls = []
-                            failed_urls = []
-                            for url in urls:
+                            for article in articles:
                                 try:
-                                    app.add(str(url), data_type='web_page')
-                                    successful_urls.append(url)
-                                except RequestException as e:
-                                    logger.error(f"Connection error for URL {url}: {str(e)}")
-                                    failed_urls.append(url)
+                                    app.add(article["link"], data_type='web_page')
                                 except Exception as e:
-                                    logger.error(f"Unexpected error for URL {url}: {str(e)}")
-                                    failed_urls.append(url)
+                                    logger.error(f"Error adding articles: {str(e)}")
+                                    st.error("An error occurred while processing the articles. Please try again.")
+
+                        # if urls:
+                        #     successful_urls = []
+                        #     failed_urls = []
+                        #     for url in urls:
+                        #         try:
+                        #             app.add(str(url), data_type='web_page')
+                        #             successful_urls.append(url)
+                        #         except RequestException as e:
+                        #             logger.error(f"Connection error for URL {url}: {str(e)}")
+                        #             failed_urls.append(url)
+                        #         except Exception as e:
+                        #             logger.error(f"Unexpected error for URL {url}: {str(e)}")
+                        #             failed_urls.append(url)
 
                             # if successful_urls:
                             #     st.success(f"Successfully added {len(successful_urls)} URLs to the knowledge base.")
@@ -871,8 +1041,8 @@ def main():
                             #     if st.button("Show failed URLs"):
                             #         st.write(failed_urls)
 
-                    if not articles and not urls:
-                        st.warning("No articles or URLs were provided to add to the knowledge base.")
+                    if not articles:
+                        st.warning("No PubMed articles provided to add to the knowledge base.")
                     
                     with st.spinner("Optimizing display of abstracts..."):
                     
@@ -886,6 +1056,8 @@ def main():
                                 st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
                             # st.write(f'Article Types (may change in left sidebar): {search_type}')
                             for article in articles:
+                                # st.markdown(f"### [{article['title']}]({article['link']})")
+                                # st.markdown(f"### {article['title']}")
                                 st.markdown(f"### [{article['title']}]({article['link']})")
                                 st.write(f"Year: {article['year']}")
                                 if article['abstract']:
@@ -994,18 +1166,18 @@ def main():
         with col2: 
             if st.session_state.rag_response:
                 
-                if st.button("Assess Response Accuracy"):
-                    prior_context = f'User question: {original_query} Evidence provided:{st.session_state.snippets}, {st.session_state.articles}, and {st.session_state.source_chunks}'
-                    evaluation_prompt = evaluate_response_prompt.format(prior_context=prior_context, prior_answer=st.session_state.rag_response)
-                    try:
-                        confirm_response_messages = [{'role': 'system', 'content': "You are an expert AI evaluator who proceeds step by step and double-checks all your answers since lives may depend on your evaluations."},
-                                                    {'role': 'user', 'content': evaluation_prompt}]
-                        confirm_response = create_chat_completion(messages=confirm_response_messages, temperature=0.3)
-                        st.write(confirm_response.choices[0].message.content)
+                # if st.button("Assess Response Accuracy"):
+                #     prior_context = f'User question: {original_query} Evidence provided:{st.session_state.snippets}, {st.session_state.articles}, and {st.session_state.source_chunks}'
+                #     evaluation_prompt = evaluate_response_prompt.format(prior_context=prior_context, prior_answer=st.session_state.rag_response)
+                #     try:
+                #         confirm_response_messages = [{'role': 'system', 'content': "You are an expert AI evaluator who proceeds step by step and double-checks all your answers since lives may depend on your evaluations."},
+                #                                     {'role': 'user', 'content': evaluation_prompt}]
+                #         confirm_response = create_chat_completion(messages=confirm_response_messages, temperature=0.3)
+                #         st.write(confirm_response.choices[0].message.content)
 
-                    except Exception as e:
-                        st.error(f"Error during OpenAI call: {e}")
-                        return
+                #     except Exception as e:
+                #         st.error(f"Error during OpenAI call: {e}")
+                #         return
                     
                 if st.button("Ask 3 AI Experts"):
                     prelim_response = st.session_state.rag_response + st.session_state.source_chunks
