@@ -122,7 +122,16 @@ with st.sidebar:
     st.divider()
     
     search_type = "all"
+    
+    with st.sidebar.popover("Web Search Settings"):
+        site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=8, step=1)
+        internet_search_provider = st.radio("Internet search provider:", options=["Google", "Exa"], horizontal = True, help = "Only specific Google domains are used for retrieving current Medical or General Knowledge. Exa.ai is a new type of search tool that predicts relevant sites; domain filtering not yet added here.")
+        if internet_search_provider == "Google":
+            st.info("Web domains used for medical questions.")
+            edited_medical_domains = st.text_area("Edit domains (maintain format pattern):", medical_domains, height=200)
 
+    st.divider()
+    st.sidebar.info("PubMed Search Settings")
     
     years_back = st.slider("Years Back for PubMed Search", min_value=1, max_value=10, value=4, step=1, help = "Set the number of years back to search PubMed.")
     
@@ -141,6 +150,8 @@ with st.sidebar:
         relevance_threshold = 0.75
         st.write("Top sources will be added to the database regardless.")    
     st.divider()
+    
+    st.sidebar.info("More Technical Settings")
     
     rag_question_model_choice = st.toggle("RAG Question Wording Model: Use GPT-4o", help = "Toggle to use GPT-4o model for RAG; otherwise, 4o-mini.")
     if rag_question_model_choice:
@@ -908,22 +919,8 @@ def main():
             ,
         }
     )
-    with st.expander("Settings and About this app"):    
-        with st.popover("Settings"):
-            site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=8, step=1)
-            internet_search_provider = st.radio("Internet search provider:", options=["Google", "Exa"], horizontal = True, help = "Only specific Google domains are used for retrieving current Medical or General Knowledge. Exa.ai is a new type of search tool that predicts relevant sites; domain filtering not yet added here.")
-            if internet_search_provider == "Google":
-                st.info("Web domains used for medical questions.")
-                edited_medical_domains = st.text_area("Edit domains (maintain format pattern):", medical_domains, height=200)
-                # edited_reliable_domains = st.text_area("Edit domains (maintain format pattern):", reliable_domains, height=200)
-
-           
-            # if internet_search_provider != "Exa":
-            #     restrict_domains = st.radio("Restrict Internet search domains to:", options=["Medical", "General Knowledge", "Full Internet", "No Internet"], horizontal=True, help = "Edit Google search domains on left sidebar. Select 'Medical' for pre-set medical site (you may edit!), 'General Knowledge' for generally reliable sources (you may edit!), 'Full Internet' (uses standard Google ranking), or 'No Internet' to skip updates to AI from internet sources when answering.")
-
-
-   
-            
+    with st.expander("About this app"):    
+          
         st.info("""This app interprets a user query and retrieves content from selected internet domains (including PubMed if applicable) for an initial answer and then asks AI personas their 
         opinions on the topic after providing them with updated content, too. Approaches shown to improve outputs like [chain of thought](https://arxiv.org/abs/2201.11903), 
         [expert rephrasing](https://arxiv.org/html/2311.04205v2), and [chain of verification](https://arxiv.org/abs/2309.11495)
@@ -932,7 +929,8 @@ def main():
         and the [EmbedChain](https://embedchain.ai/) library. The LLM model is [GPT-4o](https://openai.com/index/hello-gpt-4o/) from OpenAI.
         App author is David Liebovitz, MD
         """)
-    st.warning("Please try again if you see an error. This app is under rapid iteration.")   
+        
+    st.info("Please validate all guidance using the sources!")   
    
     
         
@@ -986,7 +984,9 @@ def main():
 
             st.session_state.articles = []   
             st.session_state.pubmed_search_terms = ""
-            st.session_state.chosen_domain = ""            
+            st.session_state.chosen_domain = ""      
+            st.session_state.followup_messages = []     
+            st.session_state.expert_answers = [] 
             
             with col1:
             
@@ -1059,7 +1059,7 @@ def main():
                                         app.add(link, data_type='web_page')
                                         success = True  # Mark as successful if no exception occurs
 
-                                        st.sidebar.markdown(f"### [{title}]({link})")  # Display the successfully added article
+                                        # st.sidebar.markdown(f"### [{title}]({link})")  # Display the successfully added article
                                     except Exception as e:
                                         retries -= 1
                                         logger.error(f"Error adding article {article}: {str(e)}")
@@ -1453,8 +1453,8 @@ def main():
 
         
         
-        if st.session_state.followup_messages:            
-            with st.sidebar:
+        if st.session_state.followup_messages != [] and st.session_state.expert_answers !=[]:            
+            with col2:
                 with st.expander("Followup Conversation"):
                     full_conversation = ""
                     replace_first_user_message(st.session_state.followup_messages, {"role": "user", "content": st.session_state.original_question})
