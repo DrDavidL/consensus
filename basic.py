@@ -983,7 +983,11 @@ def main():
         else:
             pubmed_prompt = optimize_pubmed_search_terms_system_prompt
         if col2.button('Begin Research'):
+
+            st.session_state.articles = []   
             st.session_state.pubmed_search_terms = ""
+            st.session_state.chosen_domain = ""            
+            
             with col1:
             
                 with st.spinner('Determining the best domain for your question...'):
@@ -1036,18 +1040,26 @@ def main():
                         articles = asyncio.run(pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back))
                     st.session_state.articles = articles
                     with st.spinner("Adding PubMed abstracts to the knowledge base..."):
-                        if articles:
+                        if articles != []:
                             for article in articles:
                                 retries = 3
                                 success = False
                                 while retries > 0 and not success:
                                     try:
                                         # Ensure article is treated as a dictionary
-                                        link = article.get("link", None)
+                                        if not isinstance(article, dict):
+                                            raise ValueError("Article is not a valid dictionary.")
+
+                                        link = article.get("link")
+                                        title = article.get("title", "[No Title]")
+
                                         if not link:
                                             raise ValueError("Article does not contain a 'link' key.")
+
                                         app.add(link, data_type='web_page')
                                         success = True  # Mark as successful if no exception occurs
+
+                                        st.sidebar.markdown(f"### [{title}]({link})")  # Display the successfully added article
                                     except Exception as e:
                                         retries -= 1
                                         logger.error(f"Error adding article {article}: {str(e)}")
@@ -1082,26 +1094,27 @@ def main():
                     if not articles:
                         st.warning("No PubMed articles provided to add to the knowledge base.")
                     
-                    with st.spinner("Optimizing display of abstracts..."):
-                    
-                        with st.expander("View PubMed Results Added to Knowledge Base"):
-                            # st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")
-                            # st.write(f'**Search Strategy:** {pubmed_search_terms}')
-                            pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
-                            # st.write("[View PubMed Search Results]({pubmed_link})")
-                            st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
-                            with st.popover("PubMed Search Terms"):                                
-                                st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
-                            # st.write(f'Article Types (may change in left sidebar): {search_type}')
-                            for article in articles:
-                                # st.markdown(f"### [{article['title']}]({article['link']})")
-                                # st.markdown(f"### {article['title']}")
-                                st.markdown(f"### [{article['title']}]({article['link']})")
-                                st.write(f"Year: {article['year']}")
-                                if article['abstract']:
-                                    st.write(article['abstract'])
-                                else:
-                                    st.write("No abstract available")
+                    else:
+                        with st.spinner("Optimizing display of abstracts..."):
+                            
+                            with st.expander("View PubMed Results Added to Knowledge Base"):
+                                # st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")
+                                # st.write(f'**Search Strategy:** {pubmed_search_terms}')
+                                pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
+                                # st.write("[View PubMed Search Results]({pubmed_link})")
+                                st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                                with st.popover("PubMed Search Terms"):                                
+                                    st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
+                                # st.write(f'Article Types (may change in left sidebar): {search_type}')
+                                for article in articles:
+                                    # st.markdown(f"### [{article['title']}]({article['link']})")
+                                    # st.markdown(f"### {article['title']}")
+                                    st.markdown(f"### [{article['title']}]({article['link']})")
+                                    st.write(f"Year: {article['year']}")
+                                    if article['abstract']:
+                                        st.write(article['abstract'])
+                                    else:
+                                        st.write("No abstract available")
                             
                     
                     
@@ -1290,7 +1303,7 @@ def main():
                     for snippet in st.session_state.snippets:
                         snippet = snippet.replace('<END OF SITE>', '')
                         st.markdown(snippet)
-                if st.session_state.pubmed_search_terms:    
+                if st.session_state.pubmed_search_terms and st.session_state.articles != []:    
                     with st.expander("View PubMed Results Added to Knowledge Base"):
                         pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
                             # st.write("[View PubMed Search Results]({pubmed_link})")
