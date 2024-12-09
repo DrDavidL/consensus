@@ -978,7 +978,7 @@ def main():
         col2.write(" ")
         col2.write(" ")
         col2.write(" ")
-        if col2.checkbox("Include Cutting-Edge Research in PubMed (default is consensus review articles)", help = "Check to include latest, not yet consensus, articles in the search for medical content.", value = False):
+        if st.sidebar.checkbox("Include Cutting-Edge Research in PubMed (default is consensus review articles)", help = "Check to include latest, not yet consensus, articles in the search for medical content.", value = False):
             pubmed_prompt = cutting_edge_pubmed_prompt
         else:
             pubmed_prompt = optimize_pubmed_search_terms_system_prompt
@@ -1297,12 +1297,7 @@ def main():
         #                 st.markdown(snippet)
         with col1:
             if first_view == False:
-                with st.expander("View Internet Results Added to Knowledge Base"):
-                    # if st.session_state.chosen_domain != "medical":
-                    #     st.write(f'Domains used: {st.session_state.chosen_domain}')
-                    for snippet in st.session_state.snippets:
-                        snippet = snippet.replace('<END OF SITE>', '')
-                        st.markdown(snippet)
+
                 if st.session_state.pubmed_search_terms and st.session_state.articles != []:    
                     with st.expander("View PubMed Results Added to Knowledge Base"):
                         pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
@@ -1318,6 +1313,13 @@ def main():
                                 st.write(article['abstract'])
                             else:
                                 st.write("No abstract available")
+                                
+                with st.expander("View Internet Results Added to Knowledge Base"):
+                    # if st.session_state.chosen_domain != "medical":
+                    #     st.write(f'Domains used: {st.session_state.chosen_domain}')
+                    for snippet in st.session_state.snippets:
+                        snippet = snippet.replace('<END OF SITE>', '')
+                        st.markdown(snippet)
                 if st.session_state.rag_response:
                     st.info("Preliminary Response")
                     container1 = st.container(border=True)

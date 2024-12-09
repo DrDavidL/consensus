@@ -837,7 +837,87 @@ choose_domain = """You are an advanced language model. Your task is to interpret
 - "What is the capital of France?" → "site:www.wikipedia.org OR site:www.nationalgeographic.com OR site:www.britannica.com"
 """
 
-medical_domains = """site:www.nih.gov OR site:www.ncbi.nlm.nih.gov/books OR site:www.cdc.gov OR site:www.who.int OR site:www.pubmed.gov OR site:www.cochranelibrary.com OR
+medical_domains = """site:www.nih.gov OR 
+site:www.ncbi.nlm.nih.gov/books OR 
+site:www.cdc.gov OR 
+site:www.who.int OR 
+site:www.pubmed.gov OR 
+site:www.cochranelibrary.com OR 
+site:www.uptodate.com OR 
+site:www.medscape.com OR 
+site:www.ama-assn.org OR 
+site:www.nejm.org OR 
+site:www.bmj.com OR 
+site:www.thelancet.com OR 
+site:www.jamanetwork.com OR 
+site:www.mayoclinic.org OR 
+site:www.acpjournals.org OR 
+site:www.cell.com OR 
+site:www.nature.com OR 
+site:www.springer.com OR 
+site:www.wiley.com OR 
+site:www.ahrq.gov OR 
+site:www.nccn.org/guidelines/category_1 OR 
+site:www.healthline.com OR 
+site:www.medicalnewstoday.com OR 
+site:www.webmd.com OR 
+site:emedicine.medscape.com OR 
+site:www.niddk.nih.gov OR 
+site:kff.org OR 
+site:academic.oup.com OR 
+site:www.sciencedirect.com OR 
+site:www.fda.gov OR 
+site:www.ema.europa.eu OR 
+site:clinicaltrials.gov OR 
+site:drugs.com OR 
+site:www.merckmanuals.com OR 
+site:health.harvard.edu OR 
+site:stanfordhealthcare.org OR 
+site:clevelandclinic.org OR 
+site:my.clevelandclinic.org OR 
+site:arxiv.org OR 
+site:www.cancer.gov OR 
+site:www.cms.gov OR 
+site:www.niaid.nih.gov OR 
+site:medlineplus.gov OR 
+site:www.guidelines.gov OR 
+site:www.hrsa.gov OR 
+site:www.heart.org OR 
+site:www.biomedcentral.com OR 
+site:www.nccn.org OR 
+site:www.unicef.org OR 
+site:www.unfpa.org OR 
+site:www.gavi.org OR 
+site:www.asco.org OR 
+site:www.ashp.org OR 
+site:www.idsociety.org OR 
+site:www.acog.org OR 
+site:www.acc.org OR 
+site:www.aafp.org OR 
+site:www.endocrine.org OR 
+site:www.genome.gov OR 
+site:www.clinicalgenome.org OR 
+site:www.snpedia.com OR 
+site:www.apha.org OR 
+site:www.healthdata.org OR 
+site:www.cdcfoundation.org OR 
+site:covid19evidence.net.au OR 
+site:www.lexicomp.com OR 
+site:www.pdr.net OR 
+site:www.rxlist.com OR 
+site:www.commonwealthfund.org OR 
+site:www.healthaffairs.org OR 
+site:www.cancernetwork.com OR 
+site:www.asco.org/practice-guidelines OR 
+site:www.patient.info OR 
+site:www.nhs.uk OR 
+site:www.tga.gov.au OR 
+site:www.hc-sc.gc.ca OR 
+site:www.aimedicaljournal.com OR 
+site:www.himss.org
+"""
+
+medical_domains_azure = """site:www.nih.gov OR site:www.ncbi.nlm.nih.gov/books OR site:www.cdc.gov OR site:www.who.int OR site:www.pubmed.gov OR site:www.cochranelibrary.com OR
     site:www.uptodate.com OR site:www.medscape.com OR site:www.ama-assn.org OR site:www.nejm.org OR
     site:www.bmj.com OR site:www.thelancet.com OR site:www.jamanetwork.com OR site:www.mayoclinic.org OR site:www.acpjournals.org OR
     site:www.cell.com OR site:www.nature.com OR site:www.springer.com OR site:www.wiley.com OR site:www.ahrq.gov OR site:www.nccn.org/guidelines/category_1 OR
