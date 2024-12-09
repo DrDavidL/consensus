@@ -899,7 +899,13 @@ def main():
             "embedder": {"provider": "openai", 
                          "config": {"api_key": api_key, 
                                     "model": embedder_model}},
-            "chunker": {"chunk_size": 2000, "chunk_overlap": 0, "length_function": "len"},
+            'chunker': {
+                'chunk_size': 1500,         # Smaller chunk size to keep text coherent and manageable
+                'chunk_overlap': 200,      # Ensure overlapping regions capture context between chunks
+                'length_function': 'len',  # Use 'len' to calculate length as number of characters
+                'min_chunk_size': 500      # Avoid chunks that are too small and lose context
+            }
+            ,
         }
     )
     with st.expander("Settings and About this app"):    
@@ -1036,15 +1042,20 @@ def main():
                                 success = False
                                 while retries > 0 and not success:
                                     try:
-                                        app.add(article["link"], data_type='web_page')
+                                        # Ensure article is treated as a dictionary
+                                        link = article.get("link", None)
+                                        if not link:
+                                            raise ValueError("Article does not contain a 'link' key.")
+                                        app.add(link, data_type='web_page')
                                         success = True  # Mark as successful if no exception occurs
                                     except Exception as e:
                                         retries -= 1
-                                        logger.error(f"Error adding article {article['link']}: {str(e)}")
+                                        logger.error(f"Error adding article {article}: {str(e)}")
                                         if retries > 0:
                                             time.sleep(1)  # Optional: Add a short delay between retries
                                         else:
-                                            st.error(f"Failed to process article {article['link']} after 3 attempts. Please try again later.")
+                                            st.error(f"Failed to process article {article} after 3 attempts. Please try again later.")
+
 
                         # if urls:
                         #     successful_urls = []
