@@ -987,6 +987,9 @@ def main():
             st.session_state.chosen_domain = ""      
             st.session_state.followup_messages = []     
             st.session_state.expert_answers = [] 
+            st.session_state.messages1 = []
+            st.session_state.messages2 = []
+            st.session_state.messages3 = []
             
             with col1:
             
