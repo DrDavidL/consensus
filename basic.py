@@ -2,6 +2,7 @@ import asyncio
 import json
 import re
 import tempfile
+import time
 from datetime import datetime, timedelta
 
 from docx import Document
@@ -1031,11 +1032,19 @@ def main():
                     with st.spinner("Adding PubMed abstracts to the knowledge base..."):
                         if articles:
                             for article in articles:
-                                try:
-                                    app.add(article["link"], data_type='web_page')
-                                except Exception as e:
-                                    logger.error(f"Error adding articles: {str(e)}")
-                                    st.error("An error occurred while processing the articles. Please try again.")
+                                retries = 3
+                                success = False
+                                while retries > 0 and not success:
+                                    try:
+                                        app.add(article["link"], data_type='web_page')
+                                        success = True  # Mark as successful if no exception occurs
+                                    except Exception as e:
+                                        retries -= 1
+                                        logger.error(f"Error adding article {article['link']}: {str(e)}")
+                                        if retries > 0:
+                                            time.sleep(1)  # Optional: Add a short delay between retries
+                                        else:
+                                            st.error(f"Failed to process article {article['link']} after 3 attempts. Please try again later.")
 
                         # if urls:
                         #     successful_urls = []
