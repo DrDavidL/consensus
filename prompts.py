@@ -825,16 +825,16 @@ choose_domain = """You are an advanced language model. Your task is to interpret
 
 - Analyze the user query.
 - Determine if the query is related to medical care or if PubMed is likely to have relevant content.
-- If the query is related to medical care or PubMed is likely helpful, return "medical".
-- If the query is not deemed "medical", identify 3 web domains most likely to have the answer. Return "site:domain1 OR site:domain2 OR site:domain3".
-- Return either the classification "medical" or "site:domain1 OR site:domain2 OR site:domain3" (using applicable domains) and no additional commentary.
+- If the query is related to medical care or PubMed is likely helpful, return only the word "medical". 
+- If the query is not deemed "medical", identify 3 web domains most likely to have the answer. Return only "site:domain1 OR site:domain2 OR site:domain3".
+- Return either the classification single word "medical" or "site:domain1 OR site:domain2 OR site:domain3" (using applicable domains) and **no additional commentary**.
 
 **Examples:**
 
-- "What are the symptoms of diabetes?" → "medical"
-- "Who was the first president of the United States?" → "site:www.wikipedia.org OR site:www.britannica.com OR site:www.history.com"
-- "How does insulin work in the body?" → "medical"
-- "What is the capital of France?" → "site:www.wikipedia.org OR site:www.nationalgeographic.com OR site:www.britannica.com"
+- Query: "What are the symptoms of diabetes?" Respond: "medical"
+- Query: "Who was the first president of the United States?" Respond: "site:www.wikipedia.org OR site:www.britannica.com OR site:www.history.com"
+- Query: "How does insulin work in the body?" Respond: "medical"
+- Query: "What is the capital of France?" Respond: "site:www.wikipedia.org OR site:www.nationalgeographic.com OR site:www.britannica.com"
 """
 
 medical_domains = """site:www.nih.gov OR 

@@ -958,6 +958,7 @@ def main():
         determine_domain_messages = [{'role': 'system', 'content': choose_domain},
                                      {'role': 'user', 'content': original_query}]
         
+        
 
 
         # Add radio buttons for domain selection
@@ -1000,6 +1001,8 @@ def main():
                 with st.spinner('Determining the best domain for your question...'):
                     restrict_domains_response = create_chat_completion(determine_domain_messages, model = topic_model, temperature=0.3, )
                     st.session_state.chosen_domain = restrict_domains_response.choices[0].message.content
+                    
+                    print(f'Here is the domain: {st.session_state.chosen_domain}')
                             # Update the `domains` variable based on the selection
                 if st.session_state.chosen_domain == "medical" and internet_search_provider == "Google":
                     if edited_medical_domains ==medical_domains:
@@ -1073,7 +1076,7 @@ def main():
                                         if retries > 0:
                                             time.sleep(1)  # Optional: Add a short delay between retries
                                         else:
-                                            st.error(f"Failed to process article {article} after 3 attempts. Please try again later.")
+                                            st.error("PubMed results did not meet relevance and recency check. Click the PubMed link to view.")
 
 
                         # if urls:
@@ -1104,26 +1107,29 @@ def main():
                     else:
                         with st.spinner("Optimizing display of abstracts..."):
                             
-                            with st.expander("View PubMed Results Added to Knowledge Base"):
-                                # st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")
-                                # st.write(f'**Search Strategy:** {pubmed_search_terms}')
-                                pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
-                                # st.write("[View PubMed Search Results]({pubmed_link})")
-                                st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
-                                with st.popover("PubMed Search Terms"):                                
-                                    st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
-                                # st.write(f'Article Types (may change in left sidebar): {search_type}')
-                                for article in articles:
-                                    # st.markdown(f"### [{article['title']}]({article['link']})")
-                                    # st.markdown(f"### {article['title']}")
-                                    st.markdown(f"### [{article['title']}]({article['link']})")
-                                    st.write(f"Year: {article['year']}")
-                                    if article['abstract']:
-                                        st.write(article['abstract'])
-                                    else:
-                                        st.write("No abstract available")
+                            try:
                             
-                    
+                                with st.expander("View PubMed Results Added to Knowledge Base"):
+                                    # st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")
+                                    # st.write(f'**Search Strategy:** {pubmed_search_terms}')
+                                    pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
+                                    # st.write("[View PubMed Search Results]({pubmed_link})")
+                                    st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                                    with st.popover("PubMed Search Terms"):                                
+                                        st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
+                                    # st.write(f'Article Types (may change in left sidebar): {search_type}')
+                                    for article in articles:
+                                        # st.markdown(f"### [{article['title']}]({article['link']})")
+                                        # st.markdown(f"### {article['title']}")
+                                        st.markdown(f"### [{article['title']}]({article['link']})")
+                                        st.write(f"Year: {article['year']}")
+                                        if article['abstract']:
+                                            st.write(article['abstract'])
+                                        else:
+                                            st.write("No abstract available")
+                            
+                            except:
+                                st.write("No relevant and recent PubMed articles to include in the knowledge base.")
                     
                 with st.spinner(f'Searching for "{google_search_terms}"...'):
                     if internet_search_provider == "Google":
@@ -1304,22 +1310,24 @@ def main():
         #                 st.markdown(snippet)
         with col1:
             if first_view == False:
-
-                if st.session_state.pubmed_search_terms and st.session_state.articles != []:    
-                    with st.expander("View PubMed Results Added to Knowledge Base"):
-                        pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
-                            # st.write("[View PubMed Search Results]({pubmed_link})")
-                        # st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
-                        st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
-                        with st.popover("PubMed Search Terms"):                
-                            st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
-                        for article in st.session_state.articles:
-                            st.markdown(f"### [{article['title']}]({article['link']})")
-                            st.write(f"Year: {article['year']}")
-                            if article['abstract']:
-                                st.write(article['abstract'])
-                            else:
-                                st.write("No abstract available")
+                try:
+                    if st.session_state.pubmed_search_terms and st.session_state.articles != []:    
+                        with st.expander("View PubMed Results Added to Knowledge Base"):
+                            pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
+                                # st.write("[View PubMed Search Results]({pubmed_link})")
+                            # st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                            st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                            with st.popover("PubMed Search Terms"):                
+                                st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
+                            for article in st.session_state.articles:
+                                st.markdown(f"### [{article['title']}]({article['link']})")
+                                st.write(f"Year: {article['year']}")
+                                if article['abstract']:
+                                    st.write(article['abstract'])
+                                else:
+                                    st.write("No abstract available")
+                except:
+                    st.write("No PubMed articles to display - if topic works, API may be down!")
                                 
                 with st.expander("View Internet Results Added to Knowledge Base"):
                     # if st.session_state.chosen_domain != "medical":
