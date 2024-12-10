@@ -141,14 +141,14 @@ with st.sidebar:
     
     st.divider()
     
-    max_results = st.slider("Number of Abstracts to Review", min_value=3, max_value=30, value=15, step=1, help = "Set the number of abstracts to review.")
+    max_results = st.slider("Number of Abstracts to Review", min_value=3, max_value=30, value=20, step=1, help = "Set the number of abstracts to review.")
   
     
     st.divider()
     
     filter_relevance = st.toggle("Filter Relevance of PubMed searching", value = True, help = "Toggle to deselect.")
     if filter_relevance:
-        relevance_threshold = st.slider("Relevance Threshold", min_value=0.3, max_value=1.0, value=0.5, step=0.05, help = "Set the minimum relevance score to consider an item relevant.")
+        relevance_threshold = st.slider("Relevance Threshold", min_value=0.3, max_value=1.0, value=0.7, step=0.05, help = "Set the minimum relevance score to consider an item relevant.")
     else:
         relevance_threshold = 0.75
         st.write("Top sources will be added to the database regardless.")    
@@ -385,9 +385,9 @@ async def pubmed_abstracts(
     start_year = current_year - years_back
     search_query = f"{search_terms}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
 
-    # url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
+    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
 
-    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=pub+date&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
+    # url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=pub+date&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
 
     
     async with aiohttp.ClientSession() as session:
@@ -443,8 +443,8 @@ async def pubmed_abstracts(
                 relevant_articles = []
                 for article in filtered_articles:
                     messages = [
-                        {'role': 'system', 'content': "You are an assistant evaluating relevance of abstracts to a query."},
-                        {'role': 'user', 'content': f"Query: {st.session_state.original_question}\nAbstract: {article['abstract']}\nRespond only with a relevance score between 0 and 1 representing the likelihood the answer is found in the article. Sample response: 0.75"}
+                        {'role': 'system', 'content': "You are an assistant evaluating relevance of abstracts to a query. You only return a score between 0 and 1."},
+                        {'role': 'user', 'content': f"Query: {st.session_state.original_question}\nAbstract: {article['abstract']}\nNow, respond only with a relevance score between 0 and 1 representing the likelihood the answer is found in this article. Review articles for the subject should have high weighting. Sample response: 0.9"}
                     ]
                     
                     with st.spinner("Filtering PubMed articles for question relevance"):
@@ -457,7 +457,8 @@ async def pubmed_abstracts(
                         except Exception as e:
                             logger.error(f"Error filtering article: {e}")
                             continue
-                
+                print(f"Number of relevant articles: {len(relevant_articles)}")
+                print(f"Number of original articles: {len(filtered_articles)}")
                 # Separate filtered articles and URLs
                 articles = [{'id': a['id'], 'title': a['title'], 'link': a['link'], 'year': a['year'], 'abstract': a['abstract']} for a in relevant_articles]
                 # urls = [{'id': a['id'], 'link': a['link']} for a in relevant_articles]
