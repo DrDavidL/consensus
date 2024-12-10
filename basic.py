@@ -91,6 +91,9 @@ if "messages3" not in st.session_state:
 if "followup_messages" not in st.session_state:
     st.session_state.followup_messages = []
     
+if "final_thread" not in st.session_state:
+    st.session_state.final_thread = []
+    
 if "expert_number" not in st.session_state:
     st.session_state.expert_number = 0
     
@@ -990,6 +993,7 @@ def main():
             st.session_state.messages1 = []
             st.session_state.messages2 = []
             st.session_state.messages3 = []
+            st.session_state.final_thread = []
             
             with col1:
             
@@ -1352,10 +1356,11 @@ def main():
                 with container2:
                     st.info("AI Expert Persona Responses")
                     with st.expander(f'AI {st.session_state.experts[0]} Perspective'):
+                        expert_0 = st.session_state.expert_answers[0]['choices'][0]['message']['content']
                         st.write(st.session_state.expert_answers[0]['choices'][0]['message']['content'])
                         st.session_state.messages1.append({"role": "assistant", "content": st.session_state.expert_answers[0]['choices'][0]['message']['content']})
                         if st.button("Create Word File for AI Expert 1"):
-                            doc = markdown_to_word(st.session_state.rag_response)
+                            doc = markdown_to_word(expert_0)
                             buffer = BytesIO()
                             doc.save(buffer)
                             buffer.seek(0)
@@ -1369,10 +1374,11 @@ def main():
                         # with st.expander("View Source Excerpts"):
                         #     st.markdown(st.session_state.source_chunks)
                     with st.expander(f'AI {st.session_state.experts[1]} Perspective'):
+                        expert_1 = st.session_state.expert_answers[1]['choices'][0]['message']['content']
                         st.write(st.session_state.expert_answers[1]['choices'][0]['message']['content'])
                         st.session_state.messages2.append({"role": "assistant", "content": st.session_state.expert_answers[1]['choices'][0]['message']['content']})
                         if st.button("Create Word File for AI Expert 2"):
-                            doc = markdown_to_word(st.session_state.rag_response)
+                            doc = markdown_to_word(expert_1)
                             buffer = BytesIO()
                             doc.save(buffer)
                             buffer.seek(0)
@@ -1385,10 +1391,11 @@ def main():
                             )
                     
                     with st.expander(f'AI {st.session_state.experts[2]} Perspective'):
+                        expert_2 = st.session_state.expert_answers[2]['choices'][0]['message']['content']
                         st.write(st.session_state.expert_answers[2]['choices'][0]['message']['content'])
                         st.session_state.messages3.append({"role": "assistant", "content": st.session_state.expert_answers[2]['choices'][0]['message']['content']})
                         if st.button("Create Word File for AI Expert 3"):
-                            doc = markdown_to_word(st.session_state.rag_response)
+                            doc = markdown_to_word(expert_2)
                             buffer = BytesIO()
                             doc.save(buffer)
                             buffer.seek(0)
@@ -1429,6 +1436,7 @@ def main():
                     
                     if prompt := st.chat_input("Ask followup!"):
                         st.session_state.followup_messages.append({"role": "user", "content": prompt})
+                        st.session_state.final_thread.append({"role": "user", "content": prompt})
                         with st.chat_message("user"):
                             st.markdown(prompt)
 
@@ -1445,39 +1453,47 @@ def main():
                             st.write(experts[st.session_state.expert_number-1] + ": ")
                             response = st.write_stream(stream)
                             st.session_state.followup_messages.append({"role": "assistant", "content": f"{experts[st.session_state.expert_number -1]}: {response}"})
+                            st.session_state.final_thread.append({"role": "assistant", "content": f"{experts[st.session_state.expert_number -1]}: {response}"})
+                    if st.session_state.final_thread != []:
+                        if st.checkbox("Download Followup Responses"):
+ 
                             full_conversation = ""
-                            for message in st.session_state.followup_messages:
+                            
+                            
+                            for message in st.session_state.final_thread:
                                 if message['role'] != 'system':
                                     full_conversation += f"{message['role']}: {message['content']}\n\n"
                             
                             html = markdown2.markdown(full_conversation, extras=["tables"])
                             st.download_button('Download Followup Responses', html, f'followup_responses.html', 'text/html')
-            
+                            
+                            # if st.button("Create Word File for followup conversation"):
+                            #     doc = markdown_to_word(st.session_state.final_thread)
+                            #     buffer = BytesIO()
+                            #     doc.save(buffer)
+                            #     buffer.seek(0)
+
+                            #     st.download_button(
+                            #         label="Download Word File for followup conversation",
+                            #         data=buffer,
+                            #         file_name="followup_convo.docx",
+                            #         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            #                 )
 
         
         
-        if st.session_state.followup_messages != [] and st.session_state.expert_answers !=[]:            
+        if st.session_state.final_thread != []:            
             with col2:
                 with st.expander("Followup Conversation"):
-                    full_conversation = ""
-                    replace_first_user_message(st.session_state.followup_messages, {"role": "user", "content": st.session_state.original_question})
-                    for message in st.session_state.followup_messages:
+                    list_followup = ""
+                    # replace_first_user_message(st.session_state.followup_messages, {"role": "user", "content": st.session_state.original_question})
+                    for message in st.session_state.final_thread:
                         if message['role'] != 'system':
-                            full_conversation += f"{message['role']}: {message['content']}\n\n"
-                    full_conversation = full_conversation.replace("assistant:", "")
-                    st.write(full_conversation)
-                    if st.button("Create Word File for followup conversation"):
-                        doc = markdown_to_word(st.session_state.rag_response)
-                        buffer = BytesIO()
-                        doc.save(buffer)
-                        buffer.seek(0)
+                            list_followup += f"{message['role']}: {message['content']}\n\n"
+                    list_followup = list_followup.replace("assistant:", "")
+                    st.markdown(list_followup)
 
-                        st.download_button(
-                            label="Download Word File for followup conversation",
-                            data=buffer,
-                            file_name="followup_convo.docx",
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        )
+
 
 
 if __name__ == '__main__':
