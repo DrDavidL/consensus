@@ -1102,7 +1102,8 @@ def main():
                             #         st.write(failed_urls)
 
                     if not articles:
-                        st.warning("No PubMed articles provided to add to the knowledge base.")
+                        st.warning("No recent and relevant PubMed articles identified for the knowledge base.")
+                        st.write(f'**Search Strategy Used:** {st.session_state.pubmed_search_terms}')
                     
                     else:
                         with st.spinner("Optimizing display of abstracts..."):
