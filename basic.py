@@ -24,6 +24,11 @@ from embedchain.config import BaseLlmConfig
 import logging
 from requests.exceptions import RequestException
 
+role_emojis = {
+    "user": "👤",       # Emoji for the user
+    "assistant": "🤖",  # Emoji for the assistant
+    } 
+
 # __import__('pysqlite3')
 # import sys
 # sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
@@ -45,6 +50,7 @@ from prompts import (
     rag_prompt2,
     choose_domain,
     medical_domains,
+    prelim_followup_prompt,
     evaluate_response_prompt
 )
 
@@ -110,6 +116,15 @@ if "articles" not in st.session_state:
     
 if "pubmed_search_terms" not in st.session_state:
     st.session_state.pubmed_search_terms = ""
+    
+if "full_initial_response" not in st.session_state:
+    st.session_state.full_initial_response = ""
+    
+if "initial_response_thread" not in st.session_state:
+    st.session_state.initial_response_thread = []
+    
+if "citations" not in st.session_state:
+    st.session_state.citations = []
 
 with st.sidebar:
 
@@ -994,6 +1009,7 @@ def main():
             st.session_state.messages1 = []
             st.session_state.messages2 = []
             st.session_state.messages3 = []
+            st.session_state.initial_response_thread = []
             st.session_state.final_thread = []
             
             with col1:
@@ -1195,6 +1211,7 @@ def main():
                         
                     try:    
                         answer, citations = app.query(updated_rag_query,config=query_config, citations=True)  
+                        st.session_state.citations = citations
                         
                     except Exception as e:
                         st.error(f"Error during rag query: {e}")      
@@ -1217,6 +1234,7 @@ def main():
                         full_response += "\n\n **Second Pass Review by AI Below**:\n\n"
                         full_response += "\n\n *********************\n\n"
                         full_response += f' \n\n {updated_answer.choices[0].message.content}'
+                        st.session_state.full_initial_response = full_response
                     first_view = True
                                     
                 if citations:      
@@ -1239,7 +1257,7 @@ def main():
                             
                 st.session_state.source_chunks = refine_output(citations)
                 with container1:
-                    st.info("Preliminary Response")
+                    st.info("Initial Response")
                     st.markdown(st.session_state.rag_response)
                     if st.button("Create Word Document"):
                         doc = markdown_to_word(st.session_state.rag_response)
@@ -1272,50 +1290,149 @@ def main():
                 #     except Exception as e:
                 #         st.error(f"Error during OpenAI call: {e}")
                 #         return
-                    
-                if st.button("Ask 3 AI Experts"):
-                    prelim_response = st.session_state.rag_response + st.session_state.source_chunks
-                    
-
-                    try:            
-                        completion = create_chat_completion(messages=find_experts_messages, model = experts_model, temperature=0.3, response_format="json_object")
-                    except Exception as e:
-                        st.error(f"Error during OpenAI call: {e}")
-                        return
-
-                    # st.write(f"**Response:**")
-                    json_output = completion.choices[0].message.content
-                    # st.write(json_output)
-                    experts, domains, expert_questions = extract_expert_info(json_output)
-                    st.session_state.experts = experts
-                    # for expert in st.session_state.experts:
-                    #     st.write(f"**{expert}**")
-                            # st.write(f"**Experts:** {st.session_state.experts}")
-                            # st.write(f"**Domains:** {domains}")
-                            # st.write(f"**Expert Questions:** {expert_questions}")
-                    
-                    updated_expert1_system_prompt = expert1_system_prompt.format(expert=experts[0], domain=domains[0])
-                    updated_expert2_system_prompt = expert2_system_prompt.format(expert=experts[1], domain=domains[1])
-                    updated_expert3_system_prompt = expert3_system_prompt.format(expert=experts[2], domain=domains[2])
-                    updated_question1 = expert_questions[0]
-                    updated_question2 = expert_questions[1]
-                    updated_question3 = expert_questions[2]
-                    
-                    prelim_response = st.session_state.rag_response + st.session_state.source_chunks
-                    
-                    expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
-                                        {'role': 'user', 'content': updated_question1 + "Here's what I already found online: " + prelim_response}]
-                    st.session_state.messages1 = expert1_messages
-                    expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
-                                        {'role': 'user', 'content': updated_question2 + "Here's what I already found online: " + prelim_response}]
-                    st.session_state.messages2 = expert2_messages
-                    expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
-                                        {'role': 'user', 'content': updated_question3 + "Here's what I already found online: " + prelim_response}]
-                    st.session_state.messages3 = expert3_messages
-                    
                 
-                    with st.spinner('Waiting for experts to respond...'):
-                        st.session_state.expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
+                initial_followup = st.checkbox("Ask Follow-Up Questions for Initial Response")
+                if initial_followup:
+                    prelim_response = st.session_state.rag_response + st.session_state.source_chunks
+                    formatted_output = []
+
+                    for citation in st.session_state.citations:
+                        try:
+                            # Unpack the citation into source_metadata and source_text
+                            source_metadata, source_text = citation
+
+                            # Ensure source_metadata is a dictionary
+                            if isinstance(source_metadata, dict):
+                                # Handle source_metadata dynamically
+                                metadata_details = "\n".join(
+                                    f"{key.capitalize()}: {value}" for key, value in source_metadata.items()
+                                )
+                            else:
+                                # Handle cases where source_metadata is not a dictionary
+                                metadata_details = f"Metadata: {source_metadata}"
+
+                            # Append the source details into a structured format
+                            formatted_output.append(
+                                f"{metadata_details}\n"
+                                f"Source text: {source_text}\n"
+                                "---"
+                            )
+                        except ValueError:
+                            # Handle cases where the structure of the citation is not as expected
+                            formatted_output.append(f"Invalid citation structure: {citation}\n---")
+                        except Exception as e:
+                            # Catch-all for unexpected errors
+                            formatted_output.append(f"Error processing citation: {citation}\nError: {str(e)}\n---")
+
+                    # Combine all formatted items into a single string
+                    formatted_output_str = "\n".join(formatted_output)
+
+                    # Example: print the result or process it further
+                    print(formatted_output_str)
+                    prelim_followup_prompt2 = prelim_followup_prompt.format(prior_question = original_query, 
+                                                                            evidence=formatted_output_str, 
+                                                                            prior_answer = st.session_state.rag_response, 
+                                                                            )
+                    
+                    
+                    if st.session_state.initial_response_thread == []:
+                        st.session_state.initial_response_thread.append({"role": "system", "content": prelim_followup_prompt2})
+                    with col2:                                             
+                        if initial_followup_question := st.chat_input("Ask followup!"):
+                            
+
+                            
+                            
+                            st.session_state.initial_response_thread.append({"role": "user", "content": initial_followup_question})
+                            
+                            with st.chat_message("user"):
+                                st.markdown(initial_followup_question)
+
+                            with st.chat_message("assistant"):
+                                client = OpenAI()
+                                stream = client.chat.completions.create(
+                                    model="gpt-4o",
+                                    messages=[
+                                        {"role": m["role"], "content": m["content"]}
+                                        for m in st.session_state.initial_response_thread
+                                    ],
+                                    stream=True,
+                                )
+                                
+                                response = st.write_stream(stream)
+                                st.session_state.initial_response_thread.append({"role": "assistant", "content": response})
+                            
+ 
+                        with st.expander("View full follow-up thread"):
+                            for message in st.session_state.initial_response_thread:
+                                if message['role'] != 'system':
+                                        # Fetch the emoji based on the role
+                                    emoji = role_emojis.get(message['role'], "❓")  # Default to ❓ if the role isn't recognized
+                                    # Display the message with the role emoji
+                                    st.write(f"{emoji} {message['role'].capitalize()}: {message['content']}")
+                                
+                        if st.session_state.initial_response_thread != []:
+                            if st.checkbox("Download Followup Conversation"):
+                                # Initialize the conversation string
+                                full_followup_conversation = ""
+                                
+                                # Build the conversation string with emojis
+                                for message in st.session_state.initial_response_thread:
+                                    if message['role'] != 'system':  # Skip system messages
+                                        emoji = role_emojis.get(message['role'], "❓")  # Default emoji for unrecognized roles
+                                        full_followup_conversation += f"{emoji} {message['role'].capitalize()}: {message['content']}\n\n"
+                                
+                                # Convert the conversation to HTML using markdown2
+                                html = markdown2.markdown(full_followup_conversation, extras=["tables"])
+                                
+                                # Provide a download button for the conversation
+                                st.download_button('Download Followup Conversation', html, f'followup_conversation.html', 'text/html')
+                    
+                    
+                if initial_followup == False:    
+                    if st.button("Ask 3 AI Expert Personas for Opinions"):
+                        prelim_response = st.session_state.rag_response + st.session_state.source_chunks
+                        
+
+                        try:            
+                            completion = create_chat_completion(messages=find_experts_messages, model = experts_model, temperature=0.3, response_format="json_object")
+                        except Exception as e:
+                            st.error(f"Error during OpenAI call: {e}")
+                            return
+
+                        # st.write(f"**Response:**")
+                        json_output = completion.choices[0].message.content
+                        # st.write(json_output)
+                        experts, domains, expert_questions = extract_expert_info(json_output)
+                        st.session_state.experts = experts
+                        # for expert in st.session_state.experts:
+                        #     st.write(f"**{expert}**")
+                                # st.write(f"**Experts:** {st.session_state.experts}")
+                                # st.write(f"**Domains:** {domains}")
+                                # st.write(f"**Expert Questions:** {expert_questions}")
+                        
+                        updated_expert1_system_prompt = expert1_system_prompt.format(expert=experts[0], domain=domains[0])
+                        updated_expert2_system_prompt = expert2_system_prompt.format(expert=experts[1], domain=domains[1])
+                        updated_expert3_system_prompt = expert3_system_prompt.format(expert=experts[2], domain=domains[2])
+                        updated_question1 = expert_questions[0]
+                        updated_question2 = expert_questions[1]
+                        updated_question3 = expert_questions[2]
+                        
+                        prelim_response = st.session_state.rag_response + st.session_state.source_chunks
+                        
+                        expert1_messages = [{'role': 'system', 'content': updated_expert1_system_prompt}, 
+                                            {'role': 'user', 'content': updated_question1 + "Here's what I already found online: " + prelim_response}]
+                        st.session_state.messages1 = expert1_messages
+                        expert2_messages = [{'role': 'system', 'content': updated_expert2_system_prompt}, 
+                                            {'role': 'user', 'content': updated_question2 + "Here's what I already found online: " + prelim_response}]
+                        st.session_state.messages2 = expert2_messages
+                        expert3_messages = [{'role': 'system', 'content': updated_expert3_system_prompt}, 
+                                            {'role': 'user', 'content': updated_question3 + "Here's what I already found online: " + prelim_response}]
+                        st.session_state.messages3 = expert3_messages
+                        
+                    
+                        with st.spinner('Waiting for experts to respond...'):
+                            st.session_state.expert_answers = asyncio.run(get_responses([expert1_messages, expert2_messages, expert3_messages]))
 
 
         # if st.session_state.snippets:
@@ -1354,7 +1471,7 @@ def main():
                         snippet = snippet.replace('<END OF SITE>', '')
                         st.markdown(snippet)
                 if st.session_state.rag_response:
-                    st.info("Preliminary Answer")
+                    st.info("Initial Answer")
                     container1 = st.container(border=True)
                     with container1:
                         st.markdown(st.session_state.rag_response)

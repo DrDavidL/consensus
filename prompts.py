@@ -1,3 +1,14 @@
+prelim_followup_prompt = """This conversation is in followup to:
+	-	Prior Question: {prior_question}
+	-	Prior Retrieved Evidence: {evidence}
+	-	Prior Answer: {prior_answer}
+
+Based on this context, the user—who is clinically trained—is asking a follow-up questions.  
+
+Task:
+Generate a concise, clinically precise, and actionable response. Fully integrate the provided context to anticipate the user’s underlying needs and deliver maximum clarity. 
+Avoid repetition or unnecessary elaboration. Focus solely on solving the user’s query effectively."""
+
 evaluate_response_prompt ="""#### Instructions:
 Analyze the provided LLM-generated response to identify **unsupported assertions** within the "Current Evidence and Consensus" section. For each unsupported assertion, generate a **Google Scholar search link** using a well-formulated query to investigate the claim.  
 
