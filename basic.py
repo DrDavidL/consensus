@@ -1344,7 +1344,7 @@ def main():
                         snippet = snippet.replace('<END OF SITE>', '')
                         st.markdown(snippet)
                 if st.session_state.rag_response:
-                    st.info("Preliminary Response")
+                    st.info("Preliminary Answer")
                     container1 = st.container(border=True)
                     with container1:
                         st.markdown(st.session_state.rag_response)

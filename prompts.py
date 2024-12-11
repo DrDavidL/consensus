@@ -674,22 +674,19 @@ Remember, your goal is to optimize retrieval from both Google and PubMed sources
 
 prepare_rag_prompt = """Context: You receive text sections from reliable internet sources applicable to the user query: {query} and query search terms: {search_terms}."""
 
-rag_prompt2 = """
-### **Step 1: Review the question, preliminary answer and context used**
+rag_prompt2 = """You assess information provided for practicing clinicians; no disclaimers needed.
+### **Step 1: Review the question, context used, and preliminary answer**
 - Question: {question}
-- Preliminary answer: {prelim_answer} 
-- Context used: {context}
+- Retrieved context: {context}
+- Preliminary Answer: {preliminary_answer}
 
-### **Step 2: Response Structure**
+### **Step 2: Craft Enhanced Response with Structure**
 
-#### **1. Best Answer from Retrieved Material**  
+#### **1. Best Answer from Retrieved Context**  
 - Summarize findings **exclusively from the retrieved context** without relying on any other knowledge.
 - Include the strength of the evidence (e.g., systematic reviews, randomized trials, meta-analyses).  
-- Highlight **clinical guidelines or expert consensus** found in the retrieved material.
-- Reference the source used in line or following the paragraph where possible. 
-
-   **Example Format:**
-   - "Systematic reviews suggest [X intervention] improves [condition] (p < 0.05). The American [Relevant Society] endorses [X] as first-line therapy based on these findings."
+- Highlight any **clinical guidelines or expert consensus** found in the retrieved material.
+- Accurately cite the provided context source used in-line or following this section. 
 
 #### **2. Best Answer from the Model's Own Knowledge**  
 - Present the model's synthesis based on its **training data** and generalizable insights, independent of retrievals.  
@@ -718,10 +715,7 @@ rag_prompt2 = """
 
 ### **Step 3: Formatting Guidelines**
 - Use technical language suited for healthcare professionals.
-- Include **precise statistics** (e.g., effect sizes, p-values).
-- Maintain clarity by separating findings based on certainty and source.
 - Avoid unnecessary disclaimers but indicate when evidence strength varies.
-
 """
 
 rag_prompt_azure ="""**Prompt for Critical Appraisal of Literature**  
