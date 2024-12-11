@@ -686,6 +686,7 @@ rag_prompt2 = """
 - Summarize findings **exclusively from the retrieved context** without relying on any other knowledge.
 - Include the strength of the evidence (e.g., systematic reviews, randomized trials, meta-analyses).  
 - Highlight **clinical guidelines or expert consensus** found in the retrieved material.
+- Reference the source used in line or following the paragraph where possible. 
 
    **Example Format:**
    - "Systematic reviews suggest [X intervention] improves [condition] (p < 0.05). The American [Relevant Society] endorses [X] as first-line therapy based on these findings."
