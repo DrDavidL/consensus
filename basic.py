@@ -42,7 +42,6 @@ from prompts import (
     optimize_pubmed_search_terms_system_prompt,
     cutting_edge_pubmed_prompt,
     prepare_rag_query,
-    rag_prompt,
     rag_prompt2,
     choose_domain,
     medical_domains,
@@ -127,7 +126,7 @@ with st.sidebar:
     search_type = "all"
     
     with st.sidebar.popover("Web Search Settings"):
-        site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=15, value=8, step=1)
+        site_number = st.number_input("Number of web pages to retrieve:", min_value=1, max_value=20, value=10, step=1)
         internet_search_provider = st.radio("Internet search provider:", options=["Google", "Exa"], horizontal = True, help = "Only specific Google domains are used for retrieving current Medical or General Knowledge. Exa.ai is a new type of search tool that predicts relevant sites; domain filtering not yet added here.")
         if internet_search_provider == "Google":
             st.info("Web domains used for medical questions.")
@@ -141,14 +140,14 @@ with st.sidebar:
     
     st.divider()
     
-    max_results = st.slider("Number of Abstracts to Review", min_value=3, max_value=30, value=20, step=1, help = "Set the number of abstracts to review.")
+    max_results = st.slider("Number of Abstracts to Review", min_value=3, max_value=20, value=10, step=1, help = "Set the number of abstracts to review.")
   
     
     st.divider()
     
     filter_relevance = st.toggle("Filter Relevance of PubMed searching", value = True, help = "Toggle to deselect.")
     if filter_relevance:
-        relevance_threshold = st.slider("Relevance Threshold", min_value=0.3, max_value=1.0, value=0.7, step=0.05, help = "Set the minimum relevance score to consider an item relevant.")
+        relevance_threshold = st.slider("Relevance Threshold", min_value=0.3, max_value=1.0, value=0.8, step=0.05, help = "Set the minimum relevance score to consider an item relevant.")
     else:
         relevance_threshold = 0.75
         st.write("Top sources will be added to the database regardless.")    
@@ -915,10 +914,10 @@ def main():
                          "config": {"api_key": api_key, 
                                     "model": embedder_model}},
             'chunker': {
-                'chunk_size': 1500,         # Smaller chunk size to keep text coherent and manageable
-                'chunk_overlap': 200,      # Ensure overlapping regions capture context between chunks
+                'chunk_size': 1000,         # Smaller chunk size to keep text coherent and manageable
+                'chunk_overlap': 50,      # Ensure overlapping regions capture context between chunks
                 'length_function': 'len',  # Use 'len' to calculate length as number of characters
-                'min_chunk_size': 500      # Avoid chunks that are too small and lose context
+                'min_chunk_size': 200      # Avoid chunks that are too small and lose context
             }
             ,
         }
@@ -1174,7 +1173,8 @@ def main():
                 #             for site in blocked_sites:
                 #                 st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
 
-
+                # Create a config with the desired number of documents
+                query_config = BaseLlmConfig(number_documents=15)
                 # llm_config = app.llm.config.as_dict()  
                 # config = BaseLlmConfig(**llm_config) 
                 with st.spinner('Analyzing retrieved content...'):
@@ -1182,18 +1182,21 @@ def main():
                         # Get the current date and time
                         current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                         prepare_rag_query_messages = [{'role': 'system', 'content': prepare_rag_query},
-                                                      {'role': 'user', 'content': original_query}]
+                                                      {'role': 'user', 'content': f'User query to refine: {original_query}'}]
                         query_for_rag = create_chat_completion(prepare_rag_query_messages, model=rag_question_model, temperature=0.3, )
                         updated_rag_query = query_for_rag.choices[0].message.content
-                        updated_rag_query += f'Use the following snippets: {st.session_state.snippets}, abstracts: {st.session_state.articles} AND what you can retrieve for your response.'
+                        # updated_rag_query += f'Use the following snippets: {st.session_state.snippets}, abstracts: {st.session_state.articles} AND what you can retrieve for your response.'
                         # st.write(f"**Query for RAG:** {query_for_rag.choices[0].message.content}")
                         # Update the query to include the current date and time
                         # answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible. If math calculations are required, formulate and execute python code to ensure accurate calculations. User query: {original_query}",
-                        updated_rag_prompt = rag_prompt.format(xml_query=updated_rag_query, current_datetime=current_datetime)
-                        answer, citations = app.query(updated_rag_prompt, citations=True)        
+                        # updated_rag_prompt = rag_prompt.format(xml_query=updated_rag_query, current_datetime=current_datetime)
+                        answer, citations = app.query(updated_rag_query,config=query_config, citations=True)        
                         # updated_rag_prompt2 = rag_prompt2.format(query=original_query, answer = answer_prelim, current_datetime=current_datetime, search_terms = google_search_terms)  
                         # answer, citations = app.query(updated_rag_prompt2, citations=True)
-                                                                                                      
+                        updated_answer_prompt = rag_prompt2.format(question=original_query, prelim_answer = answer, context = citations)
+                        prepare_updated_answer_messages = [
+                                                      {'role': 'user', 'content': updated_answer_prompt}]
+                        updated_answer = create_chat_completion(prepare_updated_answer_messages, model=experts_model, temperature=0.3, )                                                                              
                         # answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)                                               
                     except Exception as e:   
                         st.error(f"Error during app query: {e}")                                                                   
@@ -1201,6 +1204,9 @@ def main():
                 full_response = ""
                 if answer:                 
                     full_response = f"As of **{current_datetime}:**\n\n{answer} \n\n"
+                    full_response += "\n\n **Second Pass Review by AI Below**:\n\n"
+                    full_response += "\n\n *********************\n\n"
+                    full_response += f' \n\n {updated_answer.choices[0].message.content}'
                     first_view = True
                                     
                 if citations:      

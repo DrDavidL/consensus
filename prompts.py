@@ -598,7 +598,16 @@ current context. Users are health professionals, so no disclaimers and use techn
 2. **Supporting Assertions:** <Provide an expanded list of key statements from the context that support your answer. Include relevant statistics, any caveats, conditions, requirements, and additional considerations for full understanding by the user.>
 """
 
-prepare_rag_query = """**System:** You are an advanced query optimization assistant for a Retrieval-Augmented Generation (RAG) pipeline. Your primary task is to refine a user's original question to enhance retrieval precision in a semantic search of vector databases containing diverse sources like Google and PubMed. Your objective is to improve retrieval effectiveness by balancing specificity with comprehensiveness while retaining the original query intent.
+prepare_rag_query = """
+You will receive a user query that needs to be optimized for a semantic search in a vector database containing diverse sources like Google and PubMed. 
+Your task is to refine the user's original question to enhance retrieval precision while maintaining the original query intent. 
+Try to eliminate matches to non-informative chunks such as article headers, footers, and references. 
+Return only the optimized question intended for semantic search retrieval of the answer.
+"""
+
+
+
+prepare_rag_query_old = """**System:** You are an advanced query optimization assistant for a Retrieval-Augmented Generation (RAG) pipeline. Your primary task is to refine a user's original question to enhance retrieval precision in a semantic search of vector databases containing diverse sources like Google and PubMed. Your objective is to improve retrieval effectiveness by balancing specificity with comprehensiveness while retaining the original query intent.
 
 Follow these steps to optimize the query:
 
@@ -665,17 +674,16 @@ Remember, your goal is to optimize retrieval from both Google and PubMed sources
 
 prepare_rag_prompt = """Context: You receive text sections from reliable internet sources applicable to the user query: {query} and query search terms: {search_terms}."""
 
-rag_prompt = """
-#### **Step 1: Retrieve Context from the Literature on the User's Query**  
-- Input query: `{xml_query}` and today's date: `{current_datetime}`.  
-- Ensure the search retrieves **peer-reviewed literature, clinical trials, systematic reviews, meta-analyses, and guidelines** relevant to the query.
-
----
+rag_prompt2 = """
+### **Step 1: Review the question, preliminary answer and context used**
+- Question: {question}
+- Preliminary answer: {prelim_answer} 
+- Context used: {context}
 
 ### **Step 2: Response Structure**
 
 #### **1. Best Answer from Retrieved Material**  
-- Summarize findings **exclusively from the retrieved sources** without relying on any other knowledge.
+- Summarize findings **exclusively from the retrieved context** without relying on any other knowledge.
 - Include the strength of the evidence (e.g., systematic reviews, randomized trials, meta-analyses).  
 - Highlight **clinical guidelines or expert consensus** found in the retrieved material.
 
@@ -813,7 +821,7 @@ Your task is to provide a comprehensive, nuanced response to the user query {que
 Remember to provide specific information and details rather than general statements about how to find information. Use appropriate qualifiers (e.g., "may," "suggests," "indicates") when discussing findings that are not definitively established. Aim for a balanced presentation that acknowledges both the strength of consensus and the potential value of alternative perspectives.
 """
 
-rag_prompt2 = """This was a prior answer: {answer} - please refine and finalize your response based on the provided context for accuracy and completeness. User query: {query} and query search terms: {search_terms} and today's date, {current_datetime}. Users are health professionals, so use technical terms and avoid disclaimers. If the question cannot be answered with the given context, state: "Question not answerable with current context."""
+rag_prompt2_old = """This was a prior answer: {answer} - please refine and finalize your response based on the provided context for accuracy and completeness. User query: {query} and query search terms: {search_terms} and today's date, {current_datetime}. Users are health professionals, so use technical terms and avoid disclaimers. If the question cannot be answered with the given context, state: "Question not answerable with current context."""
 
 choose_domain = """You are an advanced language model. Your task is to interpret user queries and classify them into one of two categories: "medical" or "general knowledge." 
 
