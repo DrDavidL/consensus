@@ -678,7 +678,7 @@ rag_prompt2 = """You assess information provided for practicing clinicians; no d
 ### **Step 1: Review the question, context used, and preliminary answer**
 - Question: {question}
 - Retrieved context: {context}
-- Preliminary Answer: {preliminary_answer}
+- Preliminary Answer: {prelim_answer}
 
 ### **Step 2: Craft Enhanced Response with Structure**
 

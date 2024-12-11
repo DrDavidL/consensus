@@ -1185,28 +1185,38 @@ def main():
                                                       {'role': 'user', 'content': f'User query to refine: {original_query}'}]
                         query_for_rag = create_chat_completion(prepare_rag_query_messages, model=rag_question_model, temperature=0.3, )
                         updated_rag_query = query_for_rag.choices[0].message.content
+                    except Exception as e:   
+                        st.error(f"Error during rag prep {e}")  
                         # updated_rag_query += f'Use the following snippets: {st.session_state.snippets}, abstracts: {st.session_state.articles} AND what you can retrieve for your response.'
                         # st.write(f"**Query for RAG:** {query_for_rag.choices[0].message.content}")
                         # Update the query to include the current date and time
                         # answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible. If math calculations are required, formulate and execute python code to ensure accurate calculations. User query: {original_query}",
                         # updated_rag_prompt = rag_prompt.format(xml_query=updated_rag_query, current_datetime=current_datetime)
-                        answer, citations = app.query(updated_rag_query,config=query_config, citations=True)        
+                        
+                    try:    
+                        answer, citations = app.query(updated_rag_query,config=query_config, citations=True)  
+                        
+                    except Exception as e:
+                        st.error(f"Error during rag query: {e}")      
                         # updated_rag_prompt2 = rag_prompt2.format(query=original_query, answer = answer_prelim, current_datetime=current_datetime, search_terms = google_search_terms)  
                         # answer, citations = app.query(updated_rag_prompt2, citations=True)
+                    try:
                         updated_answer_prompt = rag_prompt2.format(question=original_query, prelim_answer = answer, context = citations)
                         prepare_updated_answer_messages = [
                                                       {'role': 'user', 'content': updated_answer_prompt}]
                         updated_answer = create_chat_completion(prepare_updated_answer_messages, model=experts_model, temperature=0.3, )                                                                              
+                    except Exception as e:
+                        st.error(f"Error during second pass: {e}")
                         # answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)                                               
-                    except Exception as e:   
-                        st.error(f"Error during app query: {e}")                                                                   
+                                                                 
 
                 full_response = ""
                 if answer:                 
                     full_response = f"As of **{current_datetime}:**\n\n{answer} \n\n"
-                    full_response += "\n\n **Second Pass Review by AI Below**:\n\n"
-                    full_response += "\n\n *********************\n\n"
-                    full_response += f' \n\n {updated_answer.choices[0].message.content}'
+                    if updated_answer is not None:
+                        full_response += "\n\n **Second Pass Review by AI Below**:\n\n"
+                        full_response += "\n\n *********************\n\n"
+                        full_response += f' \n\n {updated_answer.choices[0].message.content}'
                     first_view = True
                                     
                 if citations:      
