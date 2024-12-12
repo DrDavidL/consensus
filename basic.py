@@ -16,6 +16,7 @@ from exa_py import Exa
 import markdown2
 import xml.etree.ElementTree as ET
 from typing import Optional, List, Tuple, Dict
+from tavily import TavilyClient
 
 
 from embedchain import App
@@ -51,6 +52,7 @@ from prompts import (
     choose_domain,
     medical_domains,
     prelim_followup_prompt,
+    tavily_domains,
     evaluate_response_prompt
 )
 
@@ -125,6 +127,15 @@ if "initial_response_thread" not in st.session_state:
     
 if "citations" not in st.session_state:
     st.session_state.citations = []
+    
+if "thread_with_tavily_context" not in st.session_state:
+    st.session_state.thread_with_tavily_context = []
+
+if "tavily_followup_response" not in st.session_state:
+    st.session_state.tavily_followup_response = ""
+    
+if "raw_tavily" not in st.session_state:
+    st.session_state.raw_tavily = ""
 
 with st.sidebar:
 
@@ -1011,6 +1022,7 @@ def main():
             st.session_state.messages3 = []
             st.session_state.initial_response_thread = []
             st.session_state.final_thread = []
+            st.session_state.thread_with_tavily_context = []
             
             with col1:
             
@@ -1293,6 +1305,8 @@ def main():
                 
                 initial_followup = st.checkbox("Ask Follow-Up Questions for Initial Response")
                 if initial_followup:
+                    
+                    add_internet_content = st.checkbox("Quick retrieve of additional internet content", value = False)
                     prelim_response = st.session_state.rag_response + st.session_state.source_chunks
                     formatted_output = []
 
@@ -1340,26 +1354,83 @@ def main():
                     with col2:                                             
                         if initial_followup_question := st.chat_input("Ask followup!"):
                             
+                            if add_internet_content:
+                                try:
+                                    tavily_client = TavilyClient(api_key = st.secrets["TAVILY_API_KEY"])
+                                except Exception as e:
+                                    st.error(f"Error during Tavily client initialization: {e}")
+                                    return
 
-                            
-                            
-                            st.session_state.initial_response_thread.append({"role": "user", "content": initial_followup_question})
-                            
+                                with st.spinner("Retrieving additional internet content..."):
+                                    try:
+                                        # st.write("Trying Tavily")
+                                        updated_tavily_query = create_chat_completion(messages = [{'role': 'system', 'content': "Combine user inputs (an initial and then followup question) into one question optimized for searching online. Return only the optimized question which will be used in a python pipeline."},
+                                                            {'role': 'user', 'content': f'{original_query} and {initial_followup_question}'}])
+                                        
+                                        # st.write(f'Here is the updated query {updated_tavily_query}')                                                          
+                                        response = tavily_client.search(query = updated_tavily_query.choices[0].message.content, include_domains = tavily_domains, search_depth = "advanced" )
+                                        # st.write("Here is the raw tavily: ", response)
+                                        # json_tavily = json.loads(st.session_state.raw_tavily)
+                                        # st.write("Here is the json tavily: ", json_tavily)
+                                    except json.JSONDecodeError as e:
+                                        print(f"Error decoding JSON: {e}")
+
+                                        
+                                    # Step 1: Extract Key Fields
+                                    # query = response.get("query", "No query provided.")
+                                    # answer = response.get("answer", "No answer available.")
+                                    results = response.get("results", [])
+                                    # images = response.get("images", [])
+
+                                    # Step 2: Format Results
+                                    result_texts = []
+                                    for result in results:
+                                        result_text = f"**Title:** {result['title']}\n\n**URL:** {result['url']}\n\n**Content:** {result['content']}\n\n**Relevancy Score:** {result['score']:.2f}\n\n"
+                                        result_texts.append(result_text)
+
+                                    # # Step 3: Format Images
+                                    # image_texts = []
+                                    # for image in images:
+                                    #     image_text = f"**Description:** {image['description']}\n**URL:** {image['url']}"
+                                    #     image_texts.append(image_text)
+
+                                    # Step 4: Combine Context for AI
+                                    st.session_state.tavily_followup_response = f"""
+                                                    {chr(10).join(result_texts)}
+                                                    """ 
+                                    
+                                    # st.write("Here is the processed Tavlily response: ", st.session_state.tavily_followup_response)
+
+                                with st.expander("New Retrieved Search Content"):
+                                    st.write(f'Updated Query: {updated_tavily_query.choices[0].message.content}')
+                                    st.write("\n\n")
+                                    st.write(st.session_state.tavily_followup_response)       
+                                updated_followup_question = initial_followup_question + f"Here's more of what I found online but wnat your thoughts: {st.session_state.tavily_followup_response}"                     
+                                st.session_state.thread_with_tavily_context = st.session_state.initial_response_thread
+                                st.session_state.thread_with_tavily_context.append({"role": "user", "content": updated_followup_question})
+                                initial_followup_messages = st.session_state.thread_with_tavily_context
+                            else:
+                                st.session_state.initial_response_thread.append({"role": "user", "content": initial_followup_question})
+                                initial_followup_messages = st.session_state.initial_response_thread
                             with st.chat_message("user"):
                                 st.markdown(initial_followup_question)
 
                             with st.chat_message("assistant"):
                                 client = OpenAI()
-                                stream = client.chat.completions.create(
-                                    model="gpt-4o",
-                                    messages=[
-                                        {"role": m["role"], "content": m["content"]}
-                                        for m in st.session_state.initial_response_thread
-                                    ],
-                                    stream=True,
-                                )
+                                try:
+                                    stream = client.chat.completions.create(
+                                        model="gpt-4o",
+                                        messages=[
+                                            {"role": m["role"], "content": m["content"]}
+                                            for m in initial_followup_messages
+                                        ],
+                                        stream=True,
+                                    )
                                 
-                                response = st.write_stream(stream)
+                                    response = st.write_stream(stream)
+                                except Exception as e:
+                                    st.error(f"Error during OpenAI call: {e}")
+                                    return
                                 st.session_state.initial_response_thread.append({"role": "assistant", "content": response})
                             
  
@@ -1585,18 +1656,23 @@ def main():
 
                         with st.chat_message("assistant"):
                             client = OpenAI()
-                            stream = client.chat.completions.create(
-                                model="gpt-4o",
-                                messages=[
-                                    {"role": m["role"], "content": m["content"]}
-                                    for m in st.session_state.followup_messages
-                                ],
-                                stream=True,
-                            )
-                            st.write(experts[st.session_state.expert_number-1] + ": ")
-                            response = st.write_stream(stream)
+                            try:
+                                stream = client.chat.completions.create(
+                                    model="gpt-4o",
+                                    messages=[
+                                        {"role": m["role"], "content": m["content"]}
+                                        for m in st.session_state.followup_messages
+                                    ],
+                                    stream=True,
+                                )
+                                st.write(experts[st.session_state.expert_number-1] + ": ")
+                                response = st.write_stream(stream)
+                            except Exception as e:
+                                st.error(f"Error during OpenAI call: {e}")
+                                return
                             st.session_state.followup_messages.append({"role": "assistant", "content": f"{experts[st.session_state.expert_number -1]}: {response}"})
                             st.session_state.final_thread.append({"role": "assistant", "content": f"{experts[st.session_state.expert_number -1]}: {response}"})
+
                     if st.session_state.final_thread != []:
                         if st.checkbox("Download Followup Responses"):
  
@@ -1641,5 +1717,4 @@ def main():
 
 if __name__ == '__main__':
     main()
-
 
