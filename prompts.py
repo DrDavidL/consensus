@@ -697,7 +697,7 @@ rag_prompt2 = """You assess information provided for practicing clinicians; no d
 - Summarize findings **exclusively from the retrieved context** without relying on any other knowledge.
 - Include the strength of the evidence (e.g., systematic reviews, randomized trials, meta-analyses).  
 - Highlight any **clinical guidelines or expert consensus** found in the retrieved material.
-- Accurately cite the provided context source used in-line or following this section. 
+- If a context chunk is used for the answer and includes the source name, cite the source either in-line or following this section. 
 
 #### **2. Best Answer from the Model's Own Knowledge**  
 - Present the model's synthesis based on its **training data** and generalizable insights, independent of retrievals.  
