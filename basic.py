@@ -1306,7 +1306,8 @@ def main():
                 initial_followup = st.checkbox("Ask Follow-Up Questions for Initial Response")
                 if initial_followup:
                     
-                    add_internet_content = st.checkbox("Quick retrieve of additional internet content", value = False)
+                    add_internet_content = True
+                    # add_internet_content = st.checkbox("Quick retrieve of additional internet content", value = False)
                     prelim_response = st.session_state.rag_response + st.session_state.source_chunks
                     formatted_output = []
 
