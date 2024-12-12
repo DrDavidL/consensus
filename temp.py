@@ -1352,8 +1352,17 @@ def main():
                         if initial_followup_question := st.chat_input("Ask followup!"):
                             
                             if add_internet_content:
-                                tavily_client = TavilyClient(api_key = st.secrets["TAVILY_API_KEY"])
-                                st.session_state.tavily_followup_response = tavily_client.get_search_context(query = f'original_query: {original_query} and new question: {initial_followup_question}', include_domains = tavily_domains, search_depth = "advanced" )
+                                try:
+                                    tavily_client = TavilyClient(api_key = st.secrets["TAVILY_API_KEY"])
+                                except Exception as e:
+                                    st.error(f"Error during Tavily client initialization: {e}")
+                                    return
+                                try:
+                                    with st.spinner("Retrieving additional internet content..."):
+                                        st.session_state.tavily_followup_response = tavily_client.get_search_context(query = f'original_query: {original_query} and new question: {initial_followup_question}', include_domains = tavily_domains, search_depth = "advanced" )
+                                except Exception as e:
+                                    st.error(f"Error during Tavily call (likely require API credits): {e}")
+                                    return
                                 with st.expander("New Retrieved Search Content"):
                                     st.write(st.session_state.tavily_followup_response)       
                                 updated_followup_question = initial_followup_question + f"Here's more of what I found online but wnat your thoughts: {st.session_state.tavily_followup_response}"                     
@@ -1368,16 +1377,20 @@ def main():
 
                             with st.chat_message("assistant"):
                                 client = OpenAI()
-                                stream = client.chat.completions.create(
-                                    model="gpt-4o",
-                                    messages=[
-                                        {"role": m["role"], "content": m["content"]}
-                                        for m in initial_followup_messages
-                                    ],
-                                    stream=True,
-                                )
+                                try:
+                                    stream = client.chat.completions.create(
+                                        model="gpt-4o",
+                                        messages=[
+                                            {"role": m["role"], "content": m["content"]}
+                                            for m in initial_followup_messages
+                                        ],
+                                        stream=True,
+                                    )
                                 
-                                response = st.write_stream(stream)
+                                    response = st.write_stream(stream)
+                                except Exception as e:
+                                    st.error(f"Error during OpenAI call: {e}")
+                                    return
                                 st.session_state.initial_response_thread.append({"role": "assistant", "content": response})
                             
  
@@ -1603,16 +1616,20 @@ def main():
 
                         with st.chat_message("assistant"):
                             client = OpenAI()
-                            stream = client.chat.completions.create(
-                                model="gpt-4o",
-                                messages=[
-                                    {"role": m["role"], "content": m["content"]}
-                                    for m in st.session_state.followup_messages
-                                ],
-                                stream=True,
-                            )
-                            st.write(experts[st.session_state.expert_number-1] + ": ")
-                            response = st.write_stream(stream)
+                            try:
+                                stream = client.chat.completions.create(
+                                    model="gpt-4o",
+                                    messages=[
+                                        {"role": m["role"], "content": m["content"]}
+                                        for m in st.session_state.followup_messages
+                                    ],
+                                    stream=True,
+                                )
+                                st.write(experts[st.session_state.expert_number-1] + ": ")
+                                response = st.write_stream(stream)
+                            except Exception as e:
+                                st.error(f"Error during OpenAI call: {e}")
+                                return
                             st.session_state.followup_messages.append({"role": "assistant", "content": f"{experts[st.session_state.expert_number -1]}: {response}"})
                             st.session_state.final_thread.append({"role": "assistant", "content": f"{experts[st.session_state.expert_number -1]}: {response}"})
 
