@@ -52,6 +52,7 @@ from prompts import (
     choose_domain,
     medical_domains,
     prelim_followup_prompt,
+    tavily_domains,
     evaluate_response_prompt
 )
 
@@ -126,6 +127,12 @@ if "initial_response_thread" not in st.session_state:
     
 if "citations" not in st.session_state:
     st.session_state.citations = []
+    
+if "thread_with_tavily_context" not in st.session_state:
+    st.session_state.thread_with_tavily_context = []
+
+if "tavily_followup_response" not in st.session_state:
+    st.session_state.tavily_followup_response = ""
 
 with st.sidebar:
 
@@ -1012,6 +1019,7 @@ def main():
             st.session_state.messages3 = []
             st.session_state.initial_response_thread = []
             st.session_state.final_thread = []
+            st.session_state.thread_with_tavily_context = []
             
             with col1:
             
@@ -1294,6 +1302,7 @@ def main():
                 
                 initial_followup = st.checkbox("Ask Follow-Up Questions for Initial Response")
                 if initial_followup:
+                    
                     add_internet_content = st.checkbox("Quick retrieve of additional internet content", value = False)
                     prelim_response = st.session_state.rag_response + st.session_state.source_chunks
                     formatted_output = []
@@ -1341,16 +1350,19 @@ def main():
                         st.session_state.initial_response_thread.append({"role": "system", "content": prelim_followup_prompt2})
                     with col2:                                             
                         if initial_followup_question := st.chat_input("Ask followup!"):
-                        
+                            
                             if add_internet_content:
                                 tavily_client = TavilyClient(api_key = st.secrets["TAVILY_API_KEY"])
-                                response_tavily = tavily_client.get_search_context(query = f'original_query: {original_query} and new question: {initial_followup_question}')
-                                with st.expander("New Search Results"):
-                                    st.write(response_tavily)       
-                                    initial_followup_question += f"Here's more of what I found online but wnat your thoughts: {response_tavily}"                     
-                            
-                            st.session_state.initial_response_thread.append({"role": "user", "content": initial_followup_question})
-                            
+                                st.session_state.tavily_followup_response = tavily_client.get_search_context(query = f'original_query: {original_query} and new question: {initial_followup_question}', include_domains = tavily_domains, search_depth = "advanced" )
+                                with st.expander("New Retrieved Search Content"):
+                                    st.write(st.session_state.tavily_followup_response)       
+                                updated_followup_question = initial_followup_question + f"Here's more of what I found online but wnat your thoughts: {st.session_state.tavily_followup_response}"                     
+                                st.session_state.thread_with_tavily_context = st.session_state.initial_response_thread
+                                st.session_state.thread_with_tavily_context.append({"role": "user", "content": updated_followup_question})
+                                initial_followup_messages = st.session_state.thread_with_tavily_context
+                            else:
+                                st.session_state.initial_response_thread.append({"role": "user", "content": initial_followup_question})
+                                initial_followup_messages = st.session_state.initial_response_thread
                             with st.chat_message("user"):
                                 st.markdown(initial_followup_question)
 
@@ -1360,7 +1372,7 @@ def main():
                                     model="gpt-4o",
                                     messages=[
                                         {"role": m["role"], "content": m["content"]}
-                                        for m in st.session_state.initial_response_thread
+                                        for m in initial_followup_messages
                                     ],
                                     stream=True,
                                 )
