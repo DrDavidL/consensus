@@ -934,6 +934,8 @@ site:www.himss.org
 tavily_domains =[
       "www.nih.gov",
       "www.ncbi.nlm.nih.gov",
+      "www.medicalnewstoday.com",
+      "www.cdc.gov",
 ]
 
 tavily_domains_full = [
