@@ -936,6 +936,11 @@ tavily_domains =[
       "www.ncbi.nlm.nih.gov",
       "www.medicalnewstoday.com",
       "www.cdc.gov",
+      "www.ncbi.nlm.nih.gov/books",
+      "www.medscape.com",
+      "dynamed.com",
+      "www.uptodate.com",
+      
 ]
 
 tavily_domains_full = [

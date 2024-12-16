@@ -11,6 +11,7 @@ from io import BytesIO
 import aiohttp
 import requests
 import streamlit as st
+import anthropic
 from openai import OpenAI
 from exa_py import Exa
 import markdown2
@@ -134,6 +135,9 @@ if "thread_with_tavily_context" not in st.session_state:
 if "tavily_followup_response" not in st.session_state:
     st.session_state.tavily_followup_response = ""
     
+if "tavily_initial_response" not in st.session_state:
+    st.session_state.tavily_initial_response = ""
+    
 if "raw_tavily" not in st.session_state:
     st.session_state.raw_tavily = ""
 
@@ -181,13 +185,13 @@ with st.sidebar:
     
     st.sidebar.info("More Technical Settings")
     
-    rag_question_model_choice = st.toggle("RAG Question Wording Model: Use GPT-4o", help = "Toggle to use GPT-4o model for RAG; otherwise, 4o-mini.")
-    if rag_question_model_choice:
-        st.write("GPT-4o model selected.")
-        rag_question_model = "gpt-4o"
-    else:    
-        st.write("GPT-4o-mini model selected.")
-        rag_question_model = "gpt-4o-mini"
+    # rag_question_model_choice = st.toggle("RAG Question Wording Model: Use GPT-4o", help = "Toggle to use GPT-4o model for RAG; otherwise, 4o-mini.")
+    # if rag_question_model_choice:
+    #     st.write("GPT-4o model selected.")
+    #     rag_question_model = "gpt-4o"
+    # else:    
+    #     st.write("GPT-4o-mini model selected.")
+    #     rag_question_model = "gpt-4o-mini"
         
     st.divider()
     
@@ -210,8 +214,8 @@ with st.sidebar:
         provider = "openai"
         rag_key = api_key
     elif rag_model_choice == "Claude-3.5 Sonnet":   
-        st.write("Claude-3-5-sonnet-20240620 model selected.")
-        rag_model = "claude-3-5-sonnet-20240620"
+        st.write("Claude-3-5-sonnet-latest model selected.")
+        rag_model = "claude-3-5-sonnet-latest"
         provider = "anthropic" 
         rag_key = api_key_anthropic
     elif rag_model_choice == "GPT-4o-mini":
@@ -232,35 +236,54 @@ with st.sidebar:
         provider = "openai"
         rag_key = api_key
         
-        
-    eval_model_choice = st.radio("Evaluation Model Options", ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet",], index=1, help = "Select the RAG model to use for the AI responses.")
-    if eval_model_choice == "GPT-4o":
+    st.divider()
+    
+    second_review_model = st.radio("Second Review Model Options", ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet",], index=1, help = "Select the RAG model to use for the AI responses.")
+    if second_review_model == "GPT-4o":
         st.write("GPT-4o model selected.")
-        rag_model = "gpt-4o"
+        second_model = "gpt-4o"
         provider = "openai"
-        rag_key = api_key
-    elif eval_model_choice == "Claude-3.5 Sonnet":   
-        st.write("Claude-3-5-sonnet-20240620 model selected.")
-        rag_model = "claude-3-5-sonnet-20240620"
-        provider = "anthropic" 
-        rag_key = api_key_anthropic
-    elif eval_model_choice == "GPT-4o-mini":
+        second_key = api_key
+    elif second_review_model == "Claude-3.5 Sonnet":
+        st.write("Claude-3-5-sonnet-latest model selected.")
+        second_model = "claude-3-5-sonnet-latest"
+        provider = "anthropic"
+        second_key = api_key_anthropic
+    elif second_review_model == "GPT-4o-mini":
         st.write("GPT-4o-mini model selected.")
-        rag_model = "gpt-4o-mini"
+        second_model = "gpt-4o-mini"
         provider = "openai"
-        rag_key = api_key
+        second_key = api_key
         
-    elif eval_model_choice == "o1-mini":
-        st.write("o1-mini model selected.")
-        rag_model = "o1-mini"
-        provider = "openai"
-        rag_key = api_key
+    # rag_question_model_choice = rag_model  
+    # eval_model_choice = st.radio("Evaluation Model Options", ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet",], index=1, help = "Select the RAG model to use for the AI responses.")
+    # if eval_model_choice == "GPT-4o":
+    #     st.write("GPT-4o model selected.")
+    #     rag_model = "gpt-4o"
+    #     provider = "openai"
+    #     rag_key = api_key
+    # elif eval_model_choice == "Claude-3.5 Sonnet":   
+    #     st.write("Claude-3-5-sonnet-latest model selected.")
+    #     rag_model = "claude-3-5-sonnet-latest"
+    #     provider = "anthropic" 
+    #     rag_key = api_key_anthropic
+    # elif eval_model_choice == "GPT-4o-mini":
+    #     st.write("GPT-4o-mini model selected.")
+    #     rag_model = "gpt-4o-mini"
+    #     provider = "openai"
+    #     rag_key = api_key
         
-    elif eval_model_choice == "o1-preview":
-        st.write("o1-preview model selected.")
-        rag_model = "o1-preview"
-        provider = "openai"
-        rag_key = api_key
+    # elif eval_model_choice == "o1-mini":
+    #     st.write("o1-mini model selected.")
+    #     rag_model = "o1-mini"
+    #     provider = "openai"
+    #     rag_key = api_key
+        
+    # elif eval_model_choice == "o1-preview":
+    #     st.write("o1-preview model selected.")
+    #     rag_model = "o1-preview"
+    #     provider = "openai"
+    #     rag_key = api_key
 
     st.divider()
     experts_model_choice = st.toggle("3 AI Experts Model: Use GPT-4o-mini", help = "Toggle to use GPT-4o model for expert responses; otherwise, 4o-mini.")
@@ -1010,8 +1033,9 @@ def main():
             pubmed_prompt = cutting_edge_pubmed_prompt
         else:
             pubmed_prompt = optimize_pubmed_search_terms_system_prompt
+        
+        deeper_dive = st.sidebar.checkbox("Deeper Dive", help = "Check to include more extensive searching.", value = True)
         if col2.button('Begin Research'):
-
             st.session_state.articles = []   
             st.session_state.pubmed_search_terms = ""
             st.session_state.chosen_domain = ""      
@@ -1023,272 +1047,428 @@ def main():
             st.session_state.initial_response_thread = []
             st.session_state.final_thread = []
             st.session_state.thread_with_tavily_context = []
+            st.session_state.tavily_initial_response = []
             
-            with col1:
-            
-                with st.spinner('Determining the best domain for your question...'):
-                    restrict_domains_response = create_chat_completion(determine_domain_messages, model = topic_model, temperature=0.3, )
-                    st.session_state.chosen_domain = restrict_domains_response.choices[0].message.content
-                    
-                    print(f'Here is the domain: {st.session_state.chosen_domain}')
-                            # Update the `domains` variable based on the selection
-                if st.session_state.chosen_domain == "medical" and internet_search_provider == "Google":
-                    if edited_medical_domains ==medical_domains:
-                        domains = medical_domains
-                    else:
-                        domains = edited_medical_domains
-                        
-                else:
-                    if internet_search_provider == "Google":
-                        # if edited_reliable_domains == reliable_domains:
-                        domains = st.session_state.chosen_domain     
-                try:
-
-                    if len(app.get_data_sources() ) > 0:
-                        # st.divider()                        
-                        app.reset()
-                        
-                    
+            with col1: 
                 
-                except: 
-                    st.error("Error resetting app; just proceed")    
-
-                current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                search_messages = [{'role': 'system', 'content': optimize_search_terms_system_prompt},
-                                    {'role': 'user', 'content': f'considering it is {current_datetime}, {original_query}'}]    
-                with st.spinner('Optimizing search terms...'):
+                if deeper_dive == True:           
+                
+                    with st.spinner('Determining the best domain for your question...'):
+                        restrict_domains_response = create_chat_completion(determine_domain_messages, model = topic_model, temperature=0.3, )
+                        st.session_state.chosen_domain = restrict_domains_response.choices[0].message.content
+                        
+                        print(f'Here is the domain: {st.session_state.chosen_domain}')
+                                # Update the `domains` variable based on the selection
+                    if st.session_state.chosen_domain == "medical" and internet_search_provider == "Google":
+                        if edited_medical_domains ==medical_domains:
+                            domains = medical_domains
+                        else:
+                            domains = edited_medical_domains
+                            
+                    else:
+                        if internet_search_provider == "Google":
+                            # if edited_reliable_domains == reliable_domains:
+                            domains = st.session_state.chosen_domain     
                     try:
-                        response_google_search_terms = create_chat_completion(search_messages, temperature=0.3, )
-                    except Exception as e:
-                        st.error(f"Error during OpenAI call: {e}")
-                google_search_terms = response_google_search_terms.choices[0].message.content
-                # st.write(f'Here are the total tokens used: {response_google_search_terms.usage.total_tokens}')
-                # st.write(f'Here are the prompt tokens used: {response_google_search_terms.usage.prompt_tokens}')
-                # st.write(f'Here are the response tokens used: {response_google_search_terms.usage.completion_tokens}')
-                # st.write(f' here is the domain for logic: {st.session_state.chosen_domain}')
-                st.session_state.chosen_domain = st.session_state.chosen_domain.replace('"', '').replace("'", '')
-                if st.session_state.chosen_domain == "medical":
-                    pubmed_messages = [{'role': 'system', 'content': pubmed_prompt},
-                                    {'role': 'user', 'content': original_query}]
-                    response_pubmed_search_terms = create_chat_completion(pubmed_messages, temperature=0.3, )
-                    pubmed_search_terms = response_pubmed_search_terms.choices[0].message.content
-                    # st.write(f'Here are the pubmed terms: {pubmed_search_terms}')
-                    st.session_state.pubmed_search_terms = pubmed_search_terms
-                    with st.spinner(f'Searching PubMed for "{pubmed_search_terms}"...'):
-                        articles = asyncio.run(pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back))
-                    st.session_state.articles = articles
-                    with st.spinner("Adding PubMed abstracts to the knowledge base..."):
-                        if articles != []:
-                            for article in articles:
-                                retries = 3
-                                success = False
-                                while retries > 0 and not success:
-                                    try:
-                                        # Ensure article is treated as a dictionary
-                                        if not isinstance(article, dict):
-                                            raise ValueError("Article is not a valid dictionary.")
 
-                                        link = article.get("link")
-                                        title = article.get("title", "[No Title]")
-
-                                        if not link:
-                                            raise ValueError("Article does not contain a 'link' key.")
-
-                                        app.add(link, data_type='web_page')
-                                        success = True  # Mark as successful if no exception occurs
-
-                                        # st.sidebar.markdown(f"### [{title}]({link})")  # Display the successfully added article
-                                    except Exception as e:
-                                        retries -= 1
-                                        logger.error(f"Error adding article {article}: {str(e)}")
-                                        if retries > 0:
-                                            time.sleep(1)  # Optional: Add a short delay between retries
-                                        else:
-                                            st.error("PubMed results did not meet relevance and recency check. Click the PubMed link to view.")
-
-
-                        # if urls:
-                        #     successful_urls = []
-                        #     failed_urls = []
-                        #     for url in urls:
-                        #         try:
-                        #             app.add(str(url), data_type='web_page')
-                        #             successful_urls.append(url)
-                        #         except RequestException as e:
-                        #             logger.error(f"Connection error for URL {url}: {str(e)}")
-                        #             failed_urls.append(url)
-                        #         except Exception as e:
-                        #             logger.error(f"Unexpected error for URL {url}: {str(e)}")
-                        #             failed_urls.append(url)
-
-                            # if successful_urls:
-                            #     st.success(f"Successfully added {len(successful_urls)} URLs to the knowledge base.")
+                        if len(app.get_data_sources() ) > 0:
+                            # st.divider()                        
+                            app.reset()
                             
-                            # if failed_urls:
-                            #     st.warning(f"Failed to add {len(failed_urls)} URLs. You may want to try these again.")
-                            #     if st.button("Show failed URLs"):
-                            #         st.write(failed_urls)
-
-                    if not articles:
-                        st.warning("No recent and relevant PubMed articles identified for the knowledge base.")
-                        st.write(f'**Search Strategy Used:** {st.session_state.pubmed_search_terms}')
+                        
                     
-                    else:
-                        with st.spinner("Optimizing display of abstracts..."):
-                            
-                            try:
-                            
-                                with st.expander("View PubMed Results Added to Knowledge Base"):
-                                    # st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")
-                                    # st.write(f'**Search Strategy:** {pubmed_search_terms}')
-                                    pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
-                                    # st.write("[View PubMed Search Results]({pubmed_link})")
-                                    st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
-                                    with st.popover("PubMed Search Terms"):                                
-                                        st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
-                                    # st.write(f'Article Types (may change in left sidebar): {search_type}')
-                                    for article in articles:
-                                        # st.markdown(f"### [{article['title']}]({article['link']})")
-                                        # st.markdown(f"### {article['title']}")
-                                        st.markdown(f"### [{article['title']}]({article['link']})")
-                                        st.write(f"Year: {article['year']}")
-                                        if article['abstract']:
-                                            st.write(article['abstract'])
-                                        else:
-                                            st.write("No abstract available")
-                            
-                            except:
-                                st.write("No relevant and recent PubMed articles to include in the knowledge base.")
-                    
-                with st.spinner(f'Searching for "{google_search_terms}"...'):
-                    if internet_search_provider == "Google":
-                        # st.markdown(f"**Search Strategy:** {google_search_terms}, Domains: {domains}, site number: {site_number}")
-                        st.session_state.snippets, st.session_state.urls = realtime_search(google_search_terms, domains, site_number)
-                    else:
-                        three_years_ago = datetime.now() - timedelta(days=3 * 365.25)
-                        date_cutoff = three_years_ago.strftime("%Y-%m-%d")
-                        search_response = exa.search_and_contents(google_search_terms, text={"include_html_tags": False, "max_characters": 1000}, 
-                                    highlights={"highlights_per_url": 2, "num_sentences": 5, "query": "This is the highlight query:"}, start_published_date=date_cutoff)
-                        st.session_state.snippets =[result.text for result in search_response.results]
-                        st.session_state.urls = [result.url for result in search_response.results]
+                    except: 
+                        st.error("Error resetting app; just proceed")    
 
-                with st.expander("View Internet Results Added to Knowledge Base"):
-                    # st.write(f'**Search Strategy:** {google_search_terms}')
-                    # if st.session_state.chosen_domain != "medical":
-                    #     st.write(f'Domains used: {st.session_state.chosen_domain}')
-                    # for url in st.session_state.urls:
-                    #     # url = url.replace('<END OF SITE>', '')
-                    #     st.markdown(url)
-                    for snippet in st.session_state.snippets:
-                        snippet = snippet.replace('<END OF SITE>', '')
-                        st.markdown(snippet)
-                
-                # Initialize a list to store blocked sites
-                blocked_sites = []
-                
-                with st.spinner('Retrieving full content from web pages...'):
-                    for site in st.session_state.urls:
+                    current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    search_messages = [{'role': 'system', 'content': optimize_search_terms_system_prompt},
+                                        {'role': 'user', 'content': f'considering it is {current_datetime}, {original_query}'}]    
+                    with st.spinner('Optimizing search terms...'):
                         try:
-                            app.add(site, data_type='web_page')
+                            response_google_search_terms = create_chat_completion(search_messages, temperature=0.3, )
+                        except Exception as e:
+                            st.error(f"Error during OpenAI call: {e}")
+                    google_search_terms = response_google_search_terms.choices[0].message.content
+                    # st.write(f'Here are the total tokens used: {response_google_search_terms.usage.total_tokens}')
+                    # st.write(f'Here are the prompt tokens used: {response_google_search_terms.usage.prompt_tokens}')
+                    # st.write(f'Here are the response tokens used: {response_google_search_terms.usage.completion_tokens}')
+                    # st.write(f' here is the domain for logic: {st.session_state.chosen_domain}')
+                    st.session_state.chosen_domain = st.session_state.chosen_domain.replace('"', '').replace("'", '')
+                    if st.session_state.chosen_domain == "medical":
+                        pubmed_messages = [{'role': 'system', 'content': pubmed_prompt},
+                                        {'role': 'user', 'content': original_query}]
+                        response_pubmed_search_terms = create_chat_completion(pubmed_messages, temperature=0.3, )
+                        pubmed_search_terms = response_pubmed_search_terms.choices[0].message.content
+                        # st.write(f'Here are the pubmed terms: {pubmed_search_terms}')
+                        st.session_state.pubmed_search_terms = pubmed_search_terms
+                        with st.spinner(f'Searching PubMed for "{pubmed_search_terms}"...'):
+                            articles = asyncio.run(pubmed_abstracts(pubmed_search_terms, search_type, max_results, years_back))
+                        st.session_state.articles = articles
+                        with st.spinner("Adding PubMed abstracts to the knowledge base..."):
+                            if articles != []:
+                                for article in articles:
+                                    retries = 3
+                                    success = False
+                                    while retries > 0 and not success:
+                                        try:
+                                            # Ensure article is treated as a dictionary
+                                            if not isinstance(article, dict):
+                                                raise ValueError("Article is not a valid dictionary.")
+
+                                            link = article.get("link")
+                                            title = article.get("title", "[No Title]")
+
+                                            if not link:
+                                                raise ValueError("Article does not contain a 'link' key.")
+
+                                            app.add(link, data_type='web_page')
+                                            success = True  # Mark as successful if no exception occurs
+
+                                            # st.sidebar.markdown(f"### [{title}]({link})")  # Display the successfully added article
+                                        except Exception as e:
+                                            retries -= 1
+                                            logger.error(f"Error adding article {article}: {str(e)}")
+                                            if retries > 0:
+                                                time.sleep(1)  # Optional: Add a short delay between retries
+                                            else:
+                                                st.error("PubMed results did not meet relevance and recency check. Click the PubMed link to view.")
+
+
+                            # if urls:
+                            #     successful_urls = []
+                            #     failed_urls = []
+                            #     for url in urls:
+                            #         try:
+                            #             app.add(str(url), data_type='web_page')
+                            #             successful_urls.append(url)
+                            #         except RequestException as e:
+                            #             logger.error(f"Connection error for URL {url}: {str(e)}")
+                            #             failed_urls.append(url)
+                            #         except Exception as e:
+                            #             logger.error(f"Unexpected error for URL {url}: {str(e)}")
+                            #             failed_urls.append(url)
+
+                                # if successful_urls:
+                                #     st.success(f"Successfully added {len(successful_urls)} URLs to the knowledge base.")
+                                
+                                # if failed_urls:
+                                #     st.warning(f"Failed to add {len(failed_urls)} URLs. You may want to try these again.")
+                                #     if st.button("Show failed URLs"):
+                                #         st.write(failed_urls)
+
+                        if not articles:
+                            st.warning("No recent and relevant PubMed articles identified for the knowledge base.")
+                            st.write(f'**Search Strategy Used:** {st.session_state.pubmed_search_terms}')
+                            st.page_link(pubmed_link, label="Click here to try in PubMed", icon="📚")
+                            with st.popover("PubMed Search Terms"):                
+                                st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
+                        
+                        else:
+                            with st.spinner("Optimizing display of abstracts..."):
+                                
+                                try:
+                                
+                                    with st.expander("View PubMed Results Added to Knowledge Base"):
+                                        # st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")
+                                        # st.write(f'**Search Strategy:** {pubmed_search_terms}')
+                                        pubmed_link = "https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms
+                                        # st.write("[View PubMed Search Results]({pubmed_link})")
+                                        st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
+                                        with st.popover("PubMed Search Terms"):                                
+                                            st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
+                                        # st.write(f'Article Types (may change in left sidebar): {search_type}')
+                                        for article in articles:
+                                            # st.markdown(f"### [{article['title']}]({article['link']})")
+                                            # st.markdown(f"### {article['title']}")
+                                            st.markdown(f"### [{article['title']}]({article['link']})")
+                                            st.write(f"Year: {article['year']}")
+                                            if article['abstract']:
+                                                st.write(article['abstract'])
+                                            else:
+                                                st.write("No abstract available")
+                                
+                                except:
+                                    st.write("No relevant and recent PubMed articles to include in the knowledge base.")
+                                    st.page_link(pubmed_link, label="Click here to try in PubMed", icon="📚")
+                                    with st.popover("PubMed Search Terms"):                
+                                        st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
+                        
+                    with st.spinner(f'Searching for "{google_search_terms}"...'):
+                        if internet_search_provider == "Google":
+                            # st.markdown(f"**Search Strategy:** {google_search_terms}, Domains: {domains}, site number: {site_number}")
+                            st.session_state.snippets, st.session_state.urls = realtime_search(google_search_terms, domains, site_number)
+                        else:
+                            three_years_ago = datetime.now() - timedelta(days=3 * 365.25)
+                            date_cutoff = three_years_ago.strftime("%Y-%m-%d")
+                            search_response = exa.search_and_contents(google_search_terms, text={"include_html_tags": False, "max_characters": 1000}, 
+                                        highlights={"highlights_per_url": 2, "num_sentences": 5, "query": "This is the highlight query:"}, start_published_date=date_cutoff)
+                            st.session_state.snippets =[result.text for result in search_response.results]
+                            st.session_state.urls = [result.url for result in search_response.results]
+
+                    with st.expander("View Internet Results Added to Knowledge Base"):
+                        # st.write(f'**Search Strategy:** {google_search_terms}')
+                        # if st.session_state.chosen_domain != "medical":
+                        #     st.write(f'Domains used: {st.session_state.chosen_domain}')
+                        # for url in st.session_state.urls:
+                        #     # url = url.replace('<END OF SITE>', '')
+                        #     st.markdown(url)
+                        for snippet in st.session_state.snippets:
+                            snippet = snippet.replace('<END OF SITE>', '')
+                            st.markdown(snippet)
+                    
+                    # Initialize a list to store blocked sites
+                    blocked_sites = []
+                    
+                    with st.spinner('Retrieving full content from web pages...'):
+                        for site in st.session_state.urls:
+                            try:
+                                app.add(site, data_type='web_page')
+                                
+                            except Exception as e:
+                                # Collect the blocked sites
+                                blocked_sites.append(site)
+
+                    # if blocked_sites:
+                    #     with st.sidebar:
+                    #         with st.expander("Sites Blocking Use"):
+                    #             for site in blocked_sites:
+                    #                 st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
+
+                    # Create a config with the desired number of documents
+                    query_config = BaseLlmConfig(number_documents=15, model=rag_model)
+                    # llm_config = app.llm.config.as_dict()  
+                    # config = BaseLlmConfig(**llm_config) 
+                    with st.spinner('Analyzing retrieved content...'):
+                        try:
+                            # Get the current date and time
+                            current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                            prepare_rag_query_messages = [{'role': 'system', 'content': prepare_rag_query},
+                                                        {'role': 'user', 'content': f'User query to refine: {original_query}'}]
+                            query_for_rag = create_chat_completion(prepare_rag_query_messages, model="gpt-4o-mini", temperature=0.3, )
+                            updated_rag_query = query_for_rag.choices[0].message.content
+                        except Exception as e:   
+                            st.error(f"Error during rag prep {e}")  
+                            # updated_rag_query += f'Use the following snippets: {st.session_state.snippets}, abstracts: {st.session_state.articles} AND what you can retrieve for your response.'
+                            # st.write(f"**Query for RAG:** {query_for_rag.choices[0].message.content}")
+                            # Update the query to include the current date and time
+                            # answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible. If math calculations are required, formulate and execute python code to ensure accurate calculations. User query: {original_query}",
+                            # updated_rag_prompt = rag_prompt.format(xml_query=updated_rag_query, current_datetime=current_datetime)
+                            
+                        try:    
+                            answer, citations = app.query(updated_rag_query,config=query_config, citations=True)  
+                            st.session_state.citations = citations
                             
                         except Exception as e:
-                            # Collect the blocked sites
-                            blocked_sites.append(site)
+                            st.error(f"Error during rag query: {e}")      
+                            # updated_rag_prompt2 = rag_prompt2.format(query=original_query, answer = answer_prelim, current_datetime=current_datetime, search_terms = google_search_terms)  
+                            # answer, citations = app.query(updated_rag_prompt2, citations=True)
+                        try:
+                            updated_answer_prompt = rag_prompt2.format(question=original_query, prelim_answer = answer, context = citations)
+                            prepare_updated_answer_messages = [
+                                                        {'role': 'user', 'content': updated_answer_prompt}]
+                            if second_review_model == "gpt-4o" or second_review_model == "gpt-4o-mini":
+                                updated_answer = create_chat_completion(prepare_updated_answer_messages, model=second_model, temperature=0.3, )    
+                                updated_answer_text = updated_answer.choices[0].message.content
+                            else:
+                                client = anthropic.Anthropic(api_key=api_key_anthropic)
+                                updated_answer = client.messages.create(model=second_model, messages=prepare_updated_answer_messages, temperature=0.3, max_tokens=1500)
+                                updated_answer_text = updated_answer.content[0].text
+                                # st.write(f"Here is the updated answer: {updated_answer}")
+                                                                                                          
+                        except Exception as e:
+                            st.error(f"Error during second pass: {e}")
+                            # answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)                                               
+                                                                    
 
-                # if blocked_sites:
-                #     with st.sidebar:
-                #         with st.expander("Sites Blocking Use"):
-                #             for site in blocked_sites:
-                #                 st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
+                    full_response = ""
+                    if answer:                 
+                        full_response = f"As of **{current_datetime}:**\n\n{answer} \n\n"
+                        if updated_answer is not None:
+                            full_response += "\n\n **Second Pass Review by AI Below**:\n\n"
+                            full_response += "\n\n *********************\n\n"
+                            full_response += f' \n\n {updated_answer_text}'
+                            st.session_state.full_initial_response = full_response
+                        first_view = True
+                                        
+                    if citations:      
+                        # st.write(f"**Citations:** {citations}")                                                                                     
+                        full_response += "\n\n**Sources**:\n"                                                   
+                        sources = []                                                                            
+                        for i, citation in enumerate(citations):                                                
+                            source = citation[1]["url"]                                                         
+                            pattern = re.compile(r"([^/]+)\.[^\.]+\.pdf$")                                      
+                            match = pattern.search(source)                                                      
+                            if match:                                                                           
+                                source = match.group(1) + ".pdf"                                                
+                            sources.append(source)                                                              
+                        sources = list(set(sources))                                                            
+                        for source in sources:                                                                  
+                            full_response += f"- {source}\n"
+                        st.session_state.rag_response = full_response
+                    container1 = st.container(border=True)
+                    # container1.markdown(st.session_state.rag_response)
+                                
+                    st.session_state.source_chunks = refine_output(citations)
+                    with container1:
+                        st.info("Initial Response")
+                        st.markdown(st.session_state.rag_response)
+                        if st.button("Create Word Document"):
+                            doc = markdown_to_word(st.session_state.rag_response)
+                            buffer = BytesIO()
+                            doc.save(buffer)
+                            buffer.seek(0)
 
-                # Create a config with the desired number of documents
-                query_config = BaseLlmConfig(number_documents=15)
-                # llm_config = app.llm.config.as_dict()  
-                # config = BaseLlmConfig(**llm_config) 
-                with st.spinner('Analyzing retrieved content...'):
+                            st.download_button(
+                                label="Download Word Document",
+                                data=buffer,
+                                file_name="prelim_response.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                            )
+                        with st.expander("View Source Excerpts"):
+                            st.markdown(st.session_state.source_chunks)
+            
+            
+                else:
+
+                    with st.spinner('Determining the best domain for your question...'):
+                        restrict_domains_response = create_chat_completion(determine_domain_messages, model = topic_model, temperature=0.3, )
+                        st.session_state.chosen_domain = restrict_domains_response.choices[0].message.content
+                        
+                        print(f'Here is the domain: {st.session_state.chosen_domain}')
+                                # Update the `domains` variable based on the selection
+                    if st.session_state.chosen_domain == "medical":
+                        tavily_initial_search_domains = tavily_domains
+                    else:
+                        tavily_initial_search_domains = ""
+
+                            
                     try:
-                        # Get the current date and time
-                        current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                        prepare_rag_query_messages = [{'role': 'system', 'content': prepare_rag_query},
-                                                      {'role': 'user', 'content': f'User query to refine: {original_query}'}]
-                        query_for_rag = create_chat_completion(prepare_rag_query_messages, model=rag_question_model, temperature=0.3, )
-                        updated_rag_query = query_for_rag.choices[0].message.content
-                    except Exception as e:   
-                        st.error(f"Error during rag prep {e}")  
-                        # updated_rag_query += f'Use the following snippets: {st.session_state.snippets}, abstracts: {st.session_state.articles} AND what you can retrieve for your response.'
-                        # st.write(f"**Query for RAG:** {query_for_rag.choices[0].message.content}")
-                        # Update the query to include the current date and time
-                        # answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible. If math calculations are required, formulate and execute python code to ensure accurate calculations. User query: {original_query}",
-                        # updated_rag_prompt = rag_prompt.format(xml_query=updated_rag_query, current_datetime=current_datetime)
-                        
-                    try:    
-                        answer, citations = app.query(updated_rag_query,config=query_config, citations=True)  
-                        st.session_state.citations = citations
-                        
+                        tavily_client = TavilyClient(api_key = st.secrets["TAVILY_API_KEY"])
                     except Exception as e:
-                        st.error(f"Error during rag query: {e}")      
-                        # updated_rag_prompt2 = rag_prompt2.format(query=original_query, answer = answer_prelim, current_datetime=current_datetime, search_terms = google_search_terms)  
-                        # answer, citations = app.query(updated_rag_prompt2, citations=True)
+                        st.error(f"Error during Tavily client initialization: {e}")
+                        return
+
+                    with st.spinner("Retrieving internet content..."):
+                        try:
+                            # st.write("Trying Tavily")
+                            updated_initial_tavily_query = create_chat_completion(messages = [{'role': 'system', 'content': "Optimize the user question for submission to an online search engine. Return only the optimized question for use in a python pipeline."},
+                                                {'role': 'user', 'content': original_query}])
+                            
+                            # st.write(f'Here is the updated query {updated_tavily_query}')                                                          
+                            response = tavily_client.search(query = updated_initial_tavily_query.choices[0].message.content, include_domains = tavily_initial_search_domains, search_depth = "advanced" )
+                            # st.write("Here is the raw tavily: ", response)
+                            # json_tavily = json.loads(st.session_state.raw_tavily)
+                            # st.write("Here is the json tavily: ", json_tavily)
+                        except json.JSONDecodeError as e:
+                            print(f"Error decoding JSON: {e}")
+
+                            
+                        # Step 1: Extract Key Fields
+                        # query = response.get("query", "No query provided.")
+                        # answer = response.get("answer", "No answer available.")
+                        results = response.get("results", [])
+                        # images = response.get("images", [])
+
+                        # Step 2: Format Results
+                        result_texts = []
+                        for result in results:
+                            result_text = f"**Title:** {result['title']}\n\n**URL:** {result['url']}\n\n**Content:** {result['content']}\n\n**Relevancy Score:** {result['score']:.2f}\n\n"
+                            result_texts.append(result_text)
+
+                        # # Step 3: Format Images
+                        # image_texts = []
+                        # for image in images:
+                        #     image_text = f"**Description:** {image['description']}\n**URL:** {image['url']}"
+                        #     image_texts.append(image_text)
+
+                        # Step 4: Combine Context for AI
+                        st.session_state.tavily_initial_response = f"""
+                                        {chr(10).join(result_texts)}
+                                        """ 
+                        
+                        # st.write("Here is the processed Tavlily response: ", st.session_state.tavily_followup_response)
+
+                    with st.expander("Retrieved Search Content"):
+                        st.write(f'Updated Query: {updated_initial_tavily_query.choices[0].message.content}')
+                        st.write("\n\n")
+                        st.write(st.session_state.tavily_initial_response)     
+            
+############################## Processing Tavily Quick Search ##############################################
+
+
+                    updated_initial_question_with_tavily = original_query + f"Use the following current internet results: {st.session_state.tavily_initial_response}"                     
+
+                    st.session_state.initial_response_thread.append({"role": "user", "content": updated_initial_question_with_tavily})
                     try:
-                        updated_answer_prompt = rag_prompt2.format(question=original_query, prelim_answer = answer, context = citations)
-                        prepare_updated_answer_messages = [
-                                                      {'role': 'user', 'content': updated_answer_prompt}]
-                        updated_answer = create_chat_completion(prepare_updated_answer_messages, model=experts_model, temperature=0.3, )                                                                              
+                        updated_answer = create_chat_completion(st.session_state.initial_response_thread, model=experts_model, temperature=0.3, )                                                                              
                     except Exception as e:
                         st.error(f"Error during second pass: {e}")
                         # answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)                                               
-                                                                 
+                                                                
 
-                full_response = ""
-                if answer:                 
-                    full_response = f"As of **{current_datetime}:**\n\n{answer} \n\n"
-                    if updated_answer is not None:
-                        full_response += "\n\n **Second Pass Review by AI Below**:\n\n"
-                        full_response += "\n\n *********************\n\n"
-                        full_response += f' \n\n {updated_answer.choices[0].message.content}'
-                        st.session_state.full_initial_response = full_response
-                    first_view = True
-                                    
-                if citations:      
-                    # st.write(f"**Citations:** {citations}")                                                                                     
-                    full_response += "\n\n**Sources**:\n"                                                   
-                    sources = []                                                                            
-                    for i, citation in enumerate(citations):                                                
-                        source = citation[1]["url"]                                                         
-                        pattern = re.compile(r"([^/]+)\.[^\.]+\.pdf$")                                      
-                        match = pattern.search(source)                                                      
-                        if match:                                                                           
-                            source = match.group(1) + ".pdf"                                                
-                        sources.append(source)                                                              
-                    sources = list(set(sources))                                                            
-                    for source in sources:                                                                  
-                        full_response += f"- {source}\n"
-                    st.session_state.rag_response = full_response
-                container1 = st.container(border=True)
-                # container1.markdown(st.session_state.rag_response)
-                            
-                st.session_state.source_chunks = refine_output(citations)
+                    
+                    # full_response = ""
+                    if updated_answer:     
+                        current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')            
+                        full_response = f"As of **{current_datetime}**:\n\n"
+                        if updated_answer is not None:
+                            # full_response += "\n\n **AI Analysis**:\n\n"
+                            # full_response += "\n\n *********************\n\n"
+                            full_response += f' \n\n {updated_answer.choices[0].message.content}'
+                            st.session_state.full_initial_response = full_response
+                        first_view = True
+                                        
+                    # if citations:      
+                    #     # st.write(f"**Citations:** {citations}")                                                                                     
+                    #     full_response += "\n\n**Sources**:\n"                                                   
+                    #     sources = []                                                                            
+                    #     for i, citation in enumerate(citations):                                                
+                    #         source = citation[1]["url"]                                                         
+                    #         pattern = re.compile(r"([^/]+)\.[^\.]+\.pdf$")                                      
+                    #         match = pattern.search(source)                                                      
+                    #         if match:                                                                           
+                    #             source = match.group(1) + ".pdf"                                                
+                    #         sources.append(source)                                                              
+                    #     sources = list(set(sources))                                                            
+                    #     for source in sources:                                                                  
+                    #         full_response += f"- {source}\n"
+                    #     st.session_state.rag_response = full_response
+                    # container1 = st.container(border=True)
+                    # container1.markdown(st.session_state.rag_response)
+                                
+                    # st.session_state.source_chunks = refine_output(citations)
+                container1 = col1.container(border=True)
                 with container1:
-                    st.info("Initial Response")
-                    st.markdown(st.session_state.rag_response)
-                    if st.button("Create Word Document"):
-                        doc = markdown_to_word(st.session_state.rag_response)
-                        buffer = BytesIO()
-                        doc.save(buffer)
-                        buffer.seek(0)
+                    if st.session_state.tavily_initial_response:
+                        with st.expander("View Tavily Initial Search Results"):
+                            st.write(st.session_state.tavily_initial_response)
+                        st.info("Initial Response")
+                        st.markdown(st.session_state.full_initial_response)
+                        if st.button("Create Word Document for Quick Search"):
+                            doc = markdown_to_word(st.session_state.full_initial_response)
+                            buffer = BytesIO()
+                            doc.save(buffer)
+                            buffer.seek(0)
 
-                        st.download_button(
-                            label="Download Word Document",
-                            data=buffer,
-                            file_name="prelim_response.docx",
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                        )
-                    with st.expander("View Source Excerpts"):
-                        st.markdown(st.session_state.source_chunks)
+                            st.download_button(
+                                label="Download Word Document for Quick Search",
+                                data=buffer,
+                                file_name="full_initial_response.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                                )
+                    # with st.expander("View Source Excerpts"):
+                    #     st.markdown(st.session_state.source_chunks)
 
 
+
+
+
+
+
+
+########################## End of Tavily Quick Search #####################################################
         with col2: 
-            if st.session_state.rag_response:
+            if st.session_state.rag_response or st.session_state.full_initial_response:
                 
                 # if st.button("Assess Response Accuracy"):
                 #     prior_context = f'User question: {original_query} Evidence provided:{st.session_state.snippets}, {st.session_state.articles}, and {st.session_state.source_chunks}'
@@ -1534,7 +1714,10 @@ def main():
                                 else:
                                     st.write("No abstract available")
                 except:
-                    st.write("No PubMed articles to display - if topic works, API may be down!")
+                    st.write("No Relevant PubMed articles to display - if topic works, API may be down!")
+                    st.page_link(pubmed_link, label="Click here to try in PubMed", icon="📚")
+                    with st.popover("PubMed Search Terms"):                
+                        st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
                                 
                 with st.expander("View Internet Results Added to Knowledge Base"):
                     # if st.session_state.chosen_domain != "medical":
