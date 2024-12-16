@@ -1266,7 +1266,7 @@ def main():
                             updated_answer_prompt = rag_prompt2.format(question=original_query, prelim_answer = answer, context = citations)
                             prepare_updated_answer_messages = [
                                                         {'role': 'user', 'content': updated_answer_prompt}]
-                            if second_review_model == "gpt-4o" or second_review_model == "gpt-4o-mini":
+                            if second_model == "gpt-4o" or second_model == "gpt-4o-mini":
                                 updated_answer = create_chat_completion(prepare_updated_answer_messages, model=second_model, temperature=0.3, )    
                                 updated_answer_text = updated_answer.choices[0].message.content
                             else:
