@@ -1235,7 +1235,7 @@ def main():
                     #                 st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
 
                     # Create a config with the desired number of documents
-                    query_config = BaseLlmConfig(number_documents=15, model=rag_model)
+                    query_config = BaseLlmConfig(number_documents=15, model=rag_model, provider=provider, api_key=rag_key)
                     # llm_config = app.llm.config.as_dict()  
                     # config = BaseLlmConfig(**llm_config) 
                     with st.spinner('Analyzing retrieved content...'):
