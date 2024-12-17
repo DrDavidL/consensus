@@ -242,17 +242,17 @@ with st.sidebar:
     if second_review_model == "GPT-4o":
         st.write("GPT-4o model selected.")
         second_model = "gpt-4o"
-        provider = "openai"
+        second_provider = "openai"
         second_key = api_key
     elif second_review_model == "Claude-3.5 Sonnet":
         st.write("Claude-3-5-sonnet-latest model selected.")
         second_model = "claude-3-5-sonnet-latest"
-        provider = "anthropic"
+        second_provider = "anthropic"
         second_key = api_key_anthropic
     elif second_review_model == "GPT-4o-mini":
         st.write("GPT-4o-mini model selected.")
         second_model = "gpt-4o-mini"
-        provider = "openai"
+        second_provider = "openai"
         second_key = api_key
         
     # rag_question_model_choice = rag_model  
@@ -1236,6 +1236,7 @@ def main():
 
                     # Create a config with the desired number of documents
                     query_config = BaseLlmConfig(number_documents=15, model=rag_model, provider=provider, api_key=rag_key)
+                    # query_config = BaseLlmConfig(number_documents=15, model=rag_model, provider=provider, api_key=rag_key)
                     # llm_config = app.llm.config.as_dict()  
                     # config = BaseLlmConfig(**llm_config) 
                     with st.spinner('Analyzing retrieved content...'):
