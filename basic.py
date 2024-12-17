@@ -207,33 +207,33 @@ with st.sidebar:
 
     st.info("GPT-4o-mini performs well for other options. For more complex synthesis, stay with GPT-4o or use Claude-3.5 Sonnet.")
     
-    rag_model_choice = st.radio("RAG Model Options", ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet",], index=1, help = "Select the RAG model to use for the AI responses.")
+    rag_model_choice = st.radio("RAG Model Options", ["GPT-4o-mini", "GPT-4o",], index=1, help = "Select the RAG model to use for the AI responses.")
     if rag_model_choice == "GPT-4o":
         st.write("GPT-4o model selected.")
         rag_model = "gpt-4o"
-        provider = "openai"
+        rag_provider = "openai"
         rag_key = api_key
     elif rag_model_choice == "Claude-3.5 Sonnet":   
         st.write("Claude-3-5-sonnet-latest model selected.")
         rag_model = "claude-3-5-sonnet-latest"
-        provider = "anthropic" 
+        rag_provider = "anthropic" 
         rag_key = api_key_anthropic
     elif rag_model_choice == "GPT-4o-mini":
         st.write("GPT-4o-mini model selected.")
         rag_model = "gpt-4o-mini"
-        provider = "openai"
+        rag_provider = "openai"
         rag_key = api_key
         
     elif rag_model_choice == "o1-mini":
         st.write("o1-mini model selected.")
         rag_model = "o1-mini"
-        provider = "openai"
+        rag_provider = "openai"
         rag_key = api_key
         
     elif rag_model_choice == "o1-preview":
         st.write("o1-preview model selected.")
         rag_model = "o1-preview"
-        provider = "openai"
+        rag_provider = "openai"
         rag_key = api_key
         
     st.divider()
@@ -828,26 +828,25 @@ def extract_expert_info(json_input):
 
 @st.cache_data
 def create_chat_completion(
-    messages,
-    model="gpt-4o",
-    frequency_penalty=0,
-    logit_bias=None,
-    logprobs=False,
-    top_logprobs=None,
-    max_tokens=None,
-    n=1,
-    presence_penalty=0,
-    response_format=None,
-    seed=None,
-    stop=None,
-    stream=False,
-    include_usage=False,
-    temperature=1,
-    # top_p=1,
-    tools=None,
-    tool_choice="none",
-    user=None
-):
+                    messages,
+                    model="gpt-4o",
+                    frequency_penalty=0,
+                    logit_bias=None,
+                    logprobs=False,
+                    top_logprobs=None,
+                    max_tokens=None,
+                    n=1,
+                    presence_penalty=0,
+                    response_format=None,
+                    seed=None,
+                    stop=None,
+                    stream=False,
+                    include_usage=False,
+                    temperature=1,
+                    # top_p=1,
+                    tools=None,
+                    tool_choice="none",
+                    user=None):
     client = OpenAI()
 
     # Prepare the parameters for the API call
@@ -896,7 +895,6 @@ def create_chat_completion(
     
     return completion
 
-import streamlit as st
 
 def check_password() -> bool:
     """
@@ -947,7 +945,7 @@ def main():
     app = App.from_config(
         config={
             "llm": {
-                "provider": provider,
+                "provider": rag_provider,
                 "config": {
                     "model": rag_model,
                     "temperature": 0.5,
@@ -1159,7 +1157,7 @@ def main():
                         if not articles:
                             st.warning("No recent and relevant PubMed articles identified for the knowledge base.")
                             st.write(f'**Search Strategy Used:** {st.session_state.pubmed_search_terms}')
-                            st.page_link(pubmed_link, label="Click here to try in PubMed", icon="📚")
+                            st.page_link(pubmed_link, label="Click here to try directly in PubMed", icon="📚")
                             with st.popover("PubMed Search Terms"):                
                                 st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
                         
@@ -1235,7 +1233,7 @@ def main():
                     #                 st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
 
                     # Create a config with the desired number of documents
-                    query_config = BaseLlmConfig(number_documents=15, model=rag_model, provider=provider, api_key=rag_key)
+                    query_config = BaseLlmConfig(number_documents=15, model=rag_model)
                     # query_config = BaseLlmConfig(number_documents=15, model=rag_model, provider=provider, api_key=rag_key)
                     # llm_config = app.llm.config.as_dict()  
                     # config = BaseLlmConfig(**llm_config) 
@@ -1246,7 +1244,7 @@ def main():
                             prepare_rag_query_messages = [{'role': 'system', 'content': prepare_rag_query},
                                                         {'role': 'user', 'content': f'User query to refine: {original_query}'}]
                             query_for_rag = create_chat_completion(prepare_rag_query_messages, model="gpt-4o-mini", temperature=0.3, )
-                            updated_rag_query = query_for_rag.choices[0].message.content
+                            updated_rag_query = query_for_rag.choices[0].message.content + "\n\n User is a physician; full technical details and no disclaimers."
                         except Exception as e:   
                             st.error(f"Error during rag prep {e}")  
                             # updated_rag_query += f'Use the following snippets: {st.session_state.snippets}, abstracts: {st.session_state.articles} AND what you can retrieve for your response.'
@@ -1401,7 +1399,7 @@ def main():
 
                     st.session_state.initial_response_thread.append({"role": "user", "content": updated_initial_question_with_tavily})
                     try:
-                        updated_answer = create_chat_completion(st.session_state.initial_response_thread, model=experts_model, temperature=0.3, )                                                                              
+                        updated_answer = create_chat_completion(st.session_state.initial_response_thread, model="gpt-4o", temperature=0.3, )                                                                              
                     except Exception as e:
                         st.error(f"Error during second pass: {e}")
                         # answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)                                               

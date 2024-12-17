@@ -610,10 +610,10 @@ current context. Users are health professionals, so no disclaimers and use techn
 """
 
 prepare_rag_query = """
-You will receive a user query that needs to be optimized for a semantic search in a vector database containing diverse sources like Google and PubMed. 
+You will receive a query from a physician that needs to be optimized for a semantic search in a vector database containing diverse sources like Google and PubMed. 
 Your task is to refine the user's original question to enhance retrieval precision while maintaining the original query intent. 
 Try to eliminate matches to non-informative chunks such as article headers, footers, and references. 
-Return only the optimized question intended for semantic search retrieval of the answer.
+Return only the optimized question intended for semantic search retrieval of the answer for a physician.
 """
 
 
@@ -727,6 +727,7 @@ rag_prompt2 = """You assess information provided for practicing clinicians; no d
 ### **Step 3: Formatting Guidelines**
 - Use technical language suited for healthcare professionals.
 - Avoid unnecessary disclaimers but indicate when evidence strength varies.
+- Begin your response: #### **1. Best Answer from Retrieved Context** ...
 """
 
 rag_prompt_azure ="""**Prompt for Critical Appraisal of Literature**  
