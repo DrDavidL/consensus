@@ -1005,24 +1005,7 @@ def main():
         determine_domain_messages = [{'role': 'system', 'content': choose_domain},
                                      {'role': 'user', 'content': original_query}]
         
-        
 
-
-        # Add radio buttons for domain selection
-  
-    
-
-                            # using_pubmed = st.checkbox("Include PubMed Abstracts", help = "Check to include PubMed in the search for medical content.", value = True)
-                            # # search_type = st.selectbox("Select search type:", ["all", "clinical trials", "reviews"], index=0)
-
-
-
-
-
-
-
-                # with st.sidebar:
-                #     st.info("Exa.ai is a new type of search tool that predicts relevant sites. Helpful for general knowledge, not for specialized medical or current events.")
         first_view = False
         col2.write(" ")
         col2.write(" ")
@@ -1048,6 +1031,8 @@ def main():
             st.session_state.tavily_initial_response = []
             
             with col1: 
+                
+                ######################## Start Deeper Dive including PubMed ############################
                 
                 if deeper_dive == True:           
                 
@@ -1131,35 +1116,16 @@ def main():
                                             else:
                                                 st.error("PubMed results did not meet relevance and recency check. Click the PubMed link to view.")
 
-
-                            # if urls:
-                            #     successful_urls = []
-                            #     failed_urls = []
-                            #     for url in urls:
-                            #         try:
-                            #             app.add(str(url), data_type='web_page')
-                            #             successful_urls.append(url)
-                            #         except RequestException as e:
-                            #             logger.error(f"Connection error for URL {url}: {str(e)}")
-                            #             failed_urls.append(url)
-                            #         except Exception as e:
-                            #             logger.error(f"Unexpected error for URL {url}: {str(e)}")
-                            #             failed_urls.append(url)
-
-                                # if successful_urls:
-                                #     st.success(f"Successfully added {len(successful_urls)} URLs to the knowledge base.")
-                                
-                                # if failed_urls:
-                                #     st.warning(f"Failed to add {len(failed_urls)} URLs. You may want to try these again.")
-                                #     if st.button("Show failed URLs"):
-                                #         st.write(failed_urls)
+                        #  If no PubMed articles are found, display a link to the PubMed search
 
                         if not articles:
                             st.warning("No recent and relevant PubMed articles identified for the knowledge base.")
-                            st.write(f'**Search Strategy Used:** {st.session_state.pubmed_search_terms}')
-                            st.page_link(pubmed_link, label="Click here to try directly in PubMed", icon="📚")
+                            # st.write(f'**Search Strategy Used:** {st.session_state.pubmed_search_terms}')
+                            st.page_link("https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms, label="Click here to try directly in PubMed", icon="📚")
                             with st.popover("PubMed Search Terms"):                
                                 st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
+                                
+                        # If PubMed articles are found, add to knowledge base and display them
                         
                         else:
                             with st.spinner("Optimizing display of abstracts..."):
@@ -1185,12 +1151,17 @@ def main():
                                             else:
                                                 st.write("No abstract available")
                                 
+                                # IF trouble with PubMed formatting, display a link to the search
                                 except:
-                                    st.write("No relevant and recent PubMed articles to include in the knowledge base.")
-                                    st.page_link(pubmed_link, label="Click here to try in PubMed", icon="📚")
+                                    st.write("Trouble formatting retrieved PubMed articles.")
+                                    st.page_link("https://pubmed.ncbi.nlm.nih.gov/?term=" + st.session_state.pubmed_search_terms, label="Click here to try in PubMed", icon="📚")
                                     with st.popover("PubMed Search Terms"):                
                                         st.write(f'**Search Strategy:** {st.session_state.pubmed_search_terms}')
                         
+                    
+                    # Begin the internet search
+                    
+                    
                     with st.spinner(f'Searching for "{google_search_terms}"...'):
                         if internet_search_provider == "Google":
                             # st.markdown(f"**Search Strategy:** {google_search_terms}, Domains: {domains}, site number: {site_number}")
@@ -1226,17 +1197,12 @@ def main():
                                 # Collect the blocked sites
                                 blocked_sites.append(site)
 
-                    # if blocked_sites:
-                    #     with st.sidebar:
-                    #         with st.expander("Sites Blocking Use"):
-                    #             for site in blocked_sites:
-                    #                 st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
+
 
                     # Create a config with the desired number of documents
                     query_config = BaseLlmConfig(number_documents=15, model=rag_model)
-                    # query_config = BaseLlmConfig(number_documents=15, model=rag_model, provider=provider, api_key=rag_key)
-                    # llm_config = app.llm.config.as_dict()  
-                    # config = BaseLlmConfig(**llm_config) 
+                    
+                    # Prepare the RAG query
                     with st.spinner('Analyzing retrieved content...'):
                         try:
                             # Get the current date and time
@@ -1253,6 +1219,8 @@ def main():
                             # answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible. If math calculations are required, formulate and execute python code to ensure accurate calculations. User query: {original_query}",
                             # updated_rag_prompt = rag_prompt.format(xml_query=updated_rag_query, current_datetime=current_datetime)
                             
+                        # We will now get our answer from the RAG model
+                        
                         try:    
                             answer, citations = app.query(updated_rag_query,config=query_config, citations=True)  
                             st.session_state.citations = citations
@@ -1261,6 +1229,9 @@ def main():
                             st.error(f"Error during rag query: {e}")      
                             # updated_rag_prompt2 = rag_prompt2.format(query=original_query, answer = answer_prelim, current_datetime=current_datetime, search_terms = google_search_terms)  
                             # answer, citations = app.query(updated_rag_prompt2, citations=True)
+                        
+                        # We will now get our answer after analyzing the output of the RAG model
+                        
                         try:
                             updated_answer_prompt = rag_prompt2.format(question=original_query, prelim_answer = answer, context = citations)
                             prepare_updated_answer_messages = [
@@ -1326,7 +1297,8 @@ def main():
                         with st.expander("View Source Excerpts"):
                             st.markdown(st.session_state.source_chunks)
             
-            
+                ####################### Now we do the quick search without PubMed ############################ Not Deep!
+                
                 else:
 
                     with st.spinner('Determining the best domain for your question...'):
@@ -1392,7 +1364,7 @@ def main():
                         st.write("\n\n")
                         st.write(st.session_state.tavily_initial_response)     
             
-############################## Processing Tavily Quick Search ##############################################
+############################## Processing Tavily Quick Search Results ##############################################
 
 
                     updated_initial_question_with_tavily = original_query + f"Use the following current internet results: {st.session_state.tavily_initial_response}"                     
@@ -1417,25 +1389,9 @@ def main():
                             st.session_state.full_initial_response = full_response
                         first_view = True
                                         
-                    # if citations:      
-                    #     # st.write(f"**Citations:** {citations}")                                                                                     
-                    #     full_response += "\n\n**Sources**:\n"                                                   
-                    #     sources = []                                                                            
-                    #     for i, citation in enumerate(citations):                                                
-                    #         source = citation[1]["url"]                                                         
-                    #         pattern = re.compile(r"([^/]+)\.[^\.]+\.pdf$")                                      
-                    #         match = pattern.search(source)                                                      
-                    #         if match:                                                                           
-                    #             source = match.group(1) + ".pdf"                                                
-                    #         sources.append(source)                                                              
-                    #     sources = list(set(sources))                                                            
-                    #     for source in sources:                                                                  
-                    #         full_response += f"- {source}\n"
-                    #     st.session_state.rag_response = full_response
-                    # container1 = st.container(border=True)
-                    # container1.markdown(st.session_state.rag_response)
+
                                 
-                    # st.session_state.source_chunks = refine_output(citations)
+
                 container1 = col1.container(border=True)
                 with container1:
                     if st.session_state.tavily_initial_response:
@@ -1455,17 +1411,11 @@ def main():
                                 file_name="full_initial_response.docx",
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                                 )
-                    # with st.expander("View Source Excerpts"):
-                    #     st.markdown(st.session_state.source_chunks)
-
-
-
-
-
-
 
 
 ########################## End of Tavily Quick Search #####################################################
+                
+    
         with col2: 
             if st.session_state.rag_response or st.session_state.full_initial_response:
                 
