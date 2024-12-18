@@ -361,10 +361,12 @@ intended to retrieve citations that will contain the answer the phyician's quest
 1. **Define the Core Concepts**:
    - Identify the main topic, condition, intervention, or outcome mentioned in the question.
    - Translate these into appropriate MeSH terms and relevant text words.
+   - Often the question will be very specific, so to ensure relevant articles, the parent topic may be needed.
 
 2. **Prioritize High-Quality Evidence**:
    - When appropriate, include terms that emphasize evidence quality, such as "systematic review," "meta-analysis," "guideline," or "consensus."
    - Include publication types like "practice guideline" or "review" to ensure relevance.
+   - The goal is to return the best evidence available, not to have a high barrier.
 
 3. **Streamline Terms**:
    - Avoid extraneous words or phrases that do not contribute to the search focus.
