@@ -611,11 +611,16 @@ current context. Users are health professionals, so no disclaimers and use techn
 2. **Supporting Assertions:** <Provide an expanded list of key statements from the context that support your answer. Include relevant statistics, any caveats, conditions, requirements, and additional considerations for full understanding by the user.>
 """
 
-prepare_rag_query = """
-You will receive a query from a physician that needs to be optimized for a semantic search in a vector database containing diverse sources like Google and PubMed. 
-Your task is to refine the user's original question to enhance retrieval precision while maintaining the original query intent. 
-Try to eliminate matches to non-informative chunks such as article headers, footers, and references. 
-Return only the optimized question intended for semantic search retrieval of the answer for a physician.
+prepare_rag_query = """You are assisting a physician by refining their query to enhance semantic search precision in a vector database containing diverse medical sources such as Google Scholar, PubMed, and clinical guidelines. 
+
+**Your task:**
+1. Reframe the physician's original query to maximize retrieval accuracy without altering the intent.
+2. Where appropriate, include relevant synonyms or alternate phrasing for key terms to improve retrieval recall across diverse databases.
+3. Remove or exclude elements that might trigger irrelevant matches, such as headers, footers, references, or overly generic terms.
+4. Ensure that the final output query is designed to retrieve content relevant only to the physician's question and aligned with the context provided.
+5. Direct the system to constrain the final answer to information retrieved by the pipeline, specifically supporting it with the sources used.
+
+**Key Focus:** Maintain clinical and technical relevance while optimizing for precise semantic retrieval, ensuring that all final outputs are fully supported by the retrieved sources.
 """
 
 
