@@ -207,15 +207,20 @@ with st.sidebar:
 
     st.info("GPT-4o-mini performs well for other options. For more complex synthesis, stay with GPT-4o or use Claude-3.5 Sonnet.")
     
-    rag_model_choice = st.radio("RAG Model Options", ["GPT-4o-mini", "GPT-4o",], index=1, help = "Select the RAG model to use for the AI responses.")
+    rag_model_choice = st.radio("RAG Model Options", ["GPT-4o-mini", "GPT-4o","Gemini-1.5"], index=1, help = "Select the RAG model to use for the AI responses.")
     if rag_model_choice == "GPT-4o":
         st.write("GPT-4o model selected.")
         rag_model = "gpt-4o"
         rag_provider = "openai"
         rag_key = api_key
+    elif rag_model_choice == "Gemini-1.5":
+        st.write("Gemini-1.5 model selected.")
+        rag_model = "gemini-1.5-pro-latest"
+        rag_provider = "google"
+        rag_key = st.secrets["GOOGLE_API_KEY"]
     elif rag_model_choice == "Claude-3.5 Sonnet":   
         st.write("Claude-3-5-sonnet-latest model selected.")
-        rag_model = "claude-3-5-sonnet-latest"
+        rag_model = "claude-instant-1"
         rag_provider = "anthropic" 
         rag_key = api_key_anthropic
     elif rag_model_choice == "GPT-4o-mini":
@@ -238,7 +243,7 @@ with st.sidebar:
         
     st.divider()
     
-    second_review_model = st.radio("Second Review Model Options", ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet",], index=1, help = "Select the RAG model to use for the AI responses.")
+    second_review_model = st.radio("Second Review Model Options", ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet", "Gemini-1.5"], index=1, help = "Select the RAG model to use for the AI responses.")
     if second_review_model == "GPT-4o":
         st.write("GPT-4o model selected.")
         second_model = "gpt-4o"
@@ -254,6 +259,13 @@ with st.sidebar:
         second_model = "gpt-4o-mini"
         second_provider = "openai"
         second_key = api_key
+    elif second_review_model == "Gemini-1.5":
+        st.write("Gemini-1.5 model selected.")
+        second_model = "gemini-1.5-pro-latest"
+        second_provider = "google"
+        second_key = st.secrets["GOOGLE_API_KEY"]
+        
+        
         
     # rag_question_model_choice = rag_model  
     # eval_model_choice = st.radio("Evaluation Model Options", ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet",], index=1, help = "Select the RAG model to use for the AI responses.")
@@ -829,6 +841,7 @@ def extract_expert_info(json_input):
 @st.cache_data
 def create_chat_completion(
                     messages,
+                    google = False,
                     model="gpt-4o",
                     frequency_penalty=0,
                     logit_bias=None,
@@ -847,27 +860,39 @@ def create_chat_completion(
                     tools=None,
                     tool_choice="none",
                     user=None):
-    client = OpenAI()
+    if google:
+        client = OpenAI(
+        api_key=st.secrets["GOOGLE_API_KEY"],
+        base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        )
+        params = {
+            "model": model,
+            "messages": messages,
+            "stream": stream,
+            "temperature": temperature,
+        }
+    else:
+        client = OpenAI()
 
-    # Prepare the parameters for the API call
-    params = {
-        "model": model,
-        "messages": messages,
-        "frequency_penalty": frequency_penalty,
-        "logit_bias": logit_bias,
-        "logprobs": logprobs,
-        "top_logprobs": top_logprobs,
-        "max_tokens": max_tokens,
-        "n": n,
-        "presence_penalty": presence_penalty,
-        "response_format": response_format,
-        "seed": seed,
-        "stop": stop,
-        "stream": stream,
-        "temperature": temperature,
-        # "top_p": top_p,
-        "user": user
-    }
+        # Prepare the parameters for the API call
+        params = {
+            "model": model,
+            "messages": messages,
+            "frequency_penalty": frequency_penalty,
+            "logit_bias": logit_bias,
+            "logprobs": logprobs,
+            "top_logprobs": top_logprobs,
+            "max_tokens": max_tokens,
+            "n": n,
+            "presence_penalty": presence_penalty,
+            "response_format": response_format,
+            "seed": seed,
+            "stop": stop,
+            "stream": stream,
+            "temperature": temperature,
+            # "top_p": top_p,
+            "user": user
+        }
 
     # Handle the include_usage option for streaming
     if stream:
@@ -1236,14 +1261,18 @@ def main():
                             updated_answer_prompt = rag_prompt2.format(question=original_query, prelim_answer = answer, context = citations)
                             prepare_updated_answer_messages = [
                                                         {'role': 'user', 'content': updated_answer_prompt}]
-                            if second_model == "gpt-4o" or second_model == "gpt-4o-mini":
+                            if second_provider == "openai":
                                 updated_answer = create_chat_completion(prepare_updated_answer_messages, model=second_model, temperature=0.3, )    
                                 updated_answer_text = updated_answer.choices[0].message.content
-                            else:
+                            elif second_provider == "anthropic":
                                 client = anthropic.Anthropic(api_key=api_key_anthropic)
                                 updated_answer = client.messages.create(model=second_model, messages=prepare_updated_answer_messages, temperature=0.3, max_tokens=1500)
                                 updated_answer_text = updated_answer.content[0].text
                                 # st.write(f"Here is the updated answer: {updated_answer}")
+                            elif second_provider =="google":
+                                updated_answer = create_chat_completion(prepare_updated_answer_messages, google=True, model=second_model, temperature=0.3, )    
+                                updated_answer_text = updated_answer.choices[0].message.content
+                                
                                                                                                           
                         except Exception as e:
                             st.error(f"Error during second pass: {e}")
@@ -1252,9 +1281,9 @@ def main():
 
                     full_response = ""
                     if answer:                 
-                        full_response = f"As of **{current_datetime}:**\n\n{answer} \n\n"
+                        full_response = f"From retrieved content, **{current_datetime}:**\n\n{answer} \n\n"
                         if updated_answer is not None:
-                            full_response += "\n\n **Second Pass Review by AI Below**:\n\n"
+                            full_response += "\n\n **Second Pass Consolidation**:\n\n"
                             full_response += "\n\n *********************\n\n"
                             full_response += f' \n\n {updated_answer_text}'
                             st.session_state.full_initial_response = full_response
