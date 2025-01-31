@@ -303,13 +303,13 @@ with st.sidebar:
     #     rag_key = api_key
 
     st.divider()
-    experts_model_choice = st.toggle("3 AI Experts Model: Use GPT-4o-mini", help = "Toggle to use GPT-4o model for expert responses; otherwise, 4o-mini.")
+    experts_model_choice = st.toggle("3 AI Experts Model: Use GPT-4o", help = "Toggle to use GPT-4o model for expert responses; otherwise, o3-mini with reasoning.")
     if experts_model_choice:
         st.write("GPT-4o-mini model selected.")
-        experts_model = "gpt-4o-mini"
+        experts_model = "gpt-4o"
     else:
         st.write("GPT-4o model selected.")
-        experts_model = "gpt-4o"
+        experts_model = "o3-mini"
         
 
 
@@ -758,17 +758,24 @@ def realtime_search(query, domains, max, start_year=2020):
 # @cached(ttl=None, cache=Cache.MEMORY)
 async def get_response(messages, model = experts_model):
     async with aiohttp.ClientSession() as session:
+        if model =="o3-mini":
+            json={
+                'model': model,
+                'messages': messages,
+            }
+        else:
+            json={
+                'model': model,
+                'messages': messages,
+                'temperature': 0.3,
+            }
         response = await session.post(
             'https://api.openai.com/v1/chat/completions',
             headers={
                 'Authorization': f'Bearer {api_key}',
                 'Content-Type': 'application/json',
             },
-            json={
-                'model': model,
-                'messages': messages,
-                'temperature': 0.3,
-            }
+            json=json
         )
         return await response.json()
 
@@ -880,45 +887,29 @@ def create_chat_completion(
         client = OpenAI()
 
         # Prepare the parameters for the API call
+
+
+        params = {
+            "model": model,
+            "messages": messages,
+            "frequency_penalty": frequency_penalty,
+            "logit_bias": logit_bias,
+            "logprobs": logprobs,
+            "top_logprobs": top_logprobs,
+            "max_tokens": max_tokens,
+            "n": n,
+            "presence_penalty": presence_penalty,
+            "response_format": response_format,
+            "seed": seed,
+            "stop": stop,
+            "stream": stream,
+            "temperature": temperature,
+            # "top_p": top_p,
+            "user": user
+        }
         
-        if model =="o3-mini":
-            params = {
-                "model": model,
-                "messages": messages,
-                "frequency_penalty": frequency_penalty,
-                "logit_bias": logit_bias,
-                "logprobs": logprobs,
-                "top_logprobs": top_logprobs,
-                "max_tokens": max_tokens,
-                "n": n,
-                "presence_penalty": presence_penalty,
-                "response_format": response_format,
-                "seed": seed,
-                "stop": stop,
-                "stream": stream,
-                # "temperature": temperature,
-                # "top_p": top_p,
-                "user": user
-            }
-        else:
-            params = {
-                "model": model,
-                "messages": messages,
-                "frequency_penalty": frequency_penalty,
-                "logit_bias": logit_bias,
-                "logprobs": logprobs,
-                "top_logprobs": top_logprobs,
-                "max_tokens": max_tokens,
-                "n": n,
-                "presence_penalty": presence_penalty,
-                "response_format": response_format,
-                "seed": seed,
-                "stop": stop,
-                "stream": stream,
-                "temperature": temperature,
-                # "top_p": top_p,
-                "user": user
-            }
+    if model=="o3-mini":
+        params.pop("temperature", None)
 
     # Handle the include_usage option for streaming
     if stream:
@@ -1632,7 +1623,7 @@ def main():
                                 client = OpenAI()
                                 try:
                                     stream = client.chat.completions.create(
-                                        model="gpt-4o",
+                                        model="o3-mini",
                                         messages=[
                                             {"role": m["role"], "content": m["content"]}
                                             for m in initial_followup_messages
