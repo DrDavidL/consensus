@@ -243,7 +243,7 @@ with st.sidebar:
         
     st.divider()
     
-    second_review_model = st.radio("Second Review Model Options", ["GPT-4o-mini", "GPT-4o", "o3-mini", "Claude-3.5 Sonnet", "Gemini-1.5"], index=1, help = "Select the RAG model to use for the AI responses.")
+    second_review_model = st.radio("Second Review Model Options", ["GPT-4o-mini", "GPT-4o", "o3-mini", "Claude-3.5 Sonnet", "Gemini-1.5"], index=2, help = "Select the RAG model to use for the AI responses.")
     if second_review_model == "GPT-4o":
         st.write("GPT-4o model selected.")
         second_model = "gpt-4o"
@@ -308,7 +308,7 @@ with st.sidebar:
         st.write("GPT-4o-mini model selected.")
         experts_model = "gpt-4o"
     else:
-        st.write("GPT-4o model selected.")
+        st.write("o3-mini reasoning model selected.")
         experts_model = "o3-mini"
         
 
