@@ -229,9 +229,9 @@ with st.sidebar:
         rag_provider = "openai"
         rag_key = api_key
         
-    elif rag_model_choice == "o1-mini":
-        st.write("o1-mini model selected.")
-        rag_model = "o1-mini"
+    elif rag_model_choice == "o3-mini":
+        st.write("o3-mini reasoning model selected.")
+        rag_model = "o3-mini"
         rag_provider = "openai"
         rag_key = api_key
         
@@ -243,7 +243,7 @@ with st.sidebar:
         
     st.divider()
     
-    second_review_model = st.radio("Second Review Model Options", ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet", "Gemini-1.5"], index=1, help = "Select the RAG model to use for the AI responses.")
+    second_review_model = st.radio("Second Review Model Options", ["GPT-4o-mini", "GPT-4o", "o3-mini", "Claude-3.5 Sonnet", "Gemini-1.5"], index=1, help = "Select the RAG model to use for the AI responses.")
     if second_review_model == "GPT-4o":
         st.write("GPT-4o model selected.")
         second_model = "gpt-4o"
@@ -264,6 +264,11 @@ with st.sidebar:
         second_model = "gemini-1.5-pro-latest"
         second_provider = "google"
         second_key = st.secrets["GOOGLE_API_KEY"]
+    elif second_review_model == "o3-mini":
+        st.write("o3-mini reasoning model selected.")
+        second_model = "o3-mini"
+        second_provider = "openai"
+        second_key = api_key
         
         
         
@@ -875,24 +880,45 @@ def create_chat_completion(
         client = OpenAI()
 
         # Prepare the parameters for the API call
-        params = {
-            "model": model,
-            "messages": messages,
-            "frequency_penalty": frequency_penalty,
-            "logit_bias": logit_bias,
-            "logprobs": logprobs,
-            "top_logprobs": top_logprobs,
-            "max_tokens": max_tokens,
-            "n": n,
-            "presence_penalty": presence_penalty,
-            "response_format": response_format,
-            "seed": seed,
-            "stop": stop,
-            "stream": stream,
-            "temperature": temperature,
-            # "top_p": top_p,
-            "user": user
-        }
+        
+        if model =="o3-mini":
+            params = {
+                "model": model,
+                "messages": messages,
+                "frequency_penalty": frequency_penalty,
+                "logit_bias": logit_bias,
+                "logprobs": logprobs,
+                "top_logprobs": top_logprobs,
+                "max_tokens": max_tokens,
+                "n": n,
+                "presence_penalty": presence_penalty,
+                "response_format": response_format,
+                "seed": seed,
+                "stop": stop,
+                "stream": stream,
+                # "temperature": temperature,
+                # "top_p": top_p,
+                "user": user
+            }
+        else:
+            params = {
+                "model": model,
+                "messages": messages,
+                "frequency_penalty": frequency_penalty,
+                "logit_bias": logit_bias,
+                "logprobs": logprobs,
+                "top_logprobs": top_logprobs,
+                "max_tokens": max_tokens,
+                "n": n,
+                "presence_penalty": presence_penalty,
+                "response_format": response_format,
+                "seed": seed,
+                "stop": stop,
+                "stream": stream,
+                "temperature": temperature,
+                # "top_p": top_p,
+                "user": user
+            }
 
     # Handle the include_usage option for streaming
     if stream:
@@ -967,7 +993,33 @@ def check_password() -> bool:
 def main():
     st.title('Helpful Answers with AI!')
     db_path = get_db_path()
-    app = App.from_config(
+    if rag_model=="o3-mini":
+        config ={
+            "llm": {
+                "provider": rag_provider,
+                "config": {
+                    "model": rag_model,
+                    # "temperature": 0.5,
+                    "stream": False,
+                    "api_key": rag_key,
+                },
+            },
+            "vectordb": {
+                "provider": "chroma",
+                "config": {"collection_name": "ai-helper", "dir": db_path, "allow_reset": True},
+            },
+            "embedder": {"provider": "openai", 
+                         "config": {"api_key": api_key, 
+                                    "model": embedder_model}},
+            'chunker': {
+                'chunk_size': 1000,         # Smaller chunk size to keep text coherent and manageable
+                'chunk_overlap': 50,      # Ensure overlapping regions capture context between chunks
+                'length_function': 'len',  # Use 'len' to calculate length as number of characters
+                'min_chunk_size': 200      # Avoid chunks that are too small and lose context
+            }
+            ,
+        }
+    else:
         config={
             "llm": {
                 "provider": rag_provider,
@@ -993,6 +1045,8 @@ def main():
             }
             ,
         }
+    app = App.from_config(
+        config=config
     )
     with st.expander("About this app"):    
           
