@@ -693,10 +693,9 @@ Remember, your goal is to optimize retrieval from both Google and PubMed sources
 prepare_rag_prompt = """Context: You receive text sections from reliable internet sources applicable to the user query: {query} and query search terms: {search_terms}."""
 
 rag_prompt2 = """You assess information provided for practicing clinicians; no disclaimers needed.
-### **Step 1: Review the question, context used, and preliminary answer**
+### **Step 1: Review the question and context available**
 - Question: {question}
 - Retrieved context: {context}
-- Preliminary Answer: {prelim_answer}
 
 ### **Step 2: Craft Enhanced Response with Structure**
 
