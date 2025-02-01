@@ -22,6 +22,8 @@ import markdown2
 import xml.etree.ElementTree as ET
 from typing import List, Tuple, Dict
 from tavily import TavilyClient
+from streamlit.runtime.scriptrunner.script_run_context import get_script_run_ctx, add_script_run_ctx
+import threading
 
 from embedchain import App
 from embedchain.config import BaseLlmConfig
@@ -39,6 +41,8 @@ role_emojis = {
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
 
 #########################################
 # Import Prompts for AI Guidance and Search
@@ -353,6 +357,44 @@ async def fetch_article_details(session: aiohttp.ClientSession, id: str, details
             return id, {}, ""
 
 # Retrieve and filter PubMed abstracts based on search terms and relevance
+# Async helper to filter a single article by running the synchronous create_chat_completion call in a thread.
+# Async helper to filter a single article using a background thread,
+# while ensuring the Streamlit ScriptRunContext is attached.
+
+async def filter_article(article, original_query: str, relevance_threshold: float) -> Dict[str, str]:
+    # Capture the current Streamlit context.
+    ctx = get_script_run_ctx()
+
+    messages = [
+        {
+            'role': 'system',
+            'content': "You are an assistant evaluating relevance of abstracts to a query. Return only a score between 0 and 1."
+        },
+        {
+            'role': 'user',
+            'content': f"Query: {original_query}\nAbstract: {article['abstract']}\nRespond only with a relevance score between 0 and 1. Sample response: 0.9"
+        }
+    ]
+    
+    def thread_func():
+        # Reattach the context in this thread.
+        add_script_run_ctx(threading.current_thread(), ctx)
+        return create_chat_completion(messages, model="gpt-4o-mini", temperature=0.3)
+    
+    try:
+        response = await asyncio.to_thread(thread_func)
+        raw_output = response.choices[0].message.content.strip()
+        relevance_score = float(raw_output)
+        logger.info(f"Article '{article['title']}' relevance score: {relevance_score}")
+        if relevance_score >= relevance_threshold:
+            return article
+    except Exception as e:
+        logger.error(f"Error filtering article: {e}")
+    return None
+
+
+
+# Modified version of the filtering portion in the pubmed_abstracts function:
 async def pubmed_abstracts(
     search_terms: str,
     search_type: str = "all",
@@ -411,48 +453,17 @@ async def pubmed_abstracts(
                                 'abstract': abstract.strip(),
                                 'link': article_url
                             })
-            # Filter articles based on relevance score if required
+            # If filtering is enabled, run the relevance checks concurrently.
             if filter_relevance:
-                relevant_articles = []
-                for article in filtered_articles:
-                    messages = [
-                        {
-                            'role': 'system',
-                            'content': "You are an assistant evaluating relevance of abstracts to a query. You only return a score between 0 and 1."
-                        },
-                        {
-                            'role': 'user',
-                            'content': f"Query: {st.session_state.original_question}\nAbstract: {article['abstract']}\nNow, respond only with a relevance score between 0 and 1 representing the likelihood the answer is found in this article. Sample response: 0.9"
-                        }
-                    ]
-                    with st.spinner("Filtering PubMed articles for question relevance"):
-                        try:
-                            response = create_chat_completion(messages, model="gpt-4o-mini", temperature=0.3)
-                            relevance_score = float(response.choices[0].message.content.strip())
-                            if relevance_score >= relevance_threshold:
-                                relevant_articles.append(article)
-                        except Exception as e:
-                            logger.error(f"Error filtering article: {e}")
-                            continue
-                articles = [
-                    {
-                        'id': a['id'],
-                        'title': a['title'],
-                        'link': a['link'],
-                        'year': a['year'],
-                        'abstract': a['abstract']
-                    } for a in relevant_articles
+                filtering_tasks = [
+                    filter_article(article, st.session_state.original_question, relevance_threshold)
+                    for article in filtered_articles
                 ]
+                filtered_results = await asyncio.gather(*filtering_tasks)
+                # Remove articles that did not pass the filter (i.e. returned None)
+                articles = [article for article in filtered_results if article is not None]
             else:
-                articles = [
-                    {
-                        'id': a['id'],
-                        'title': a['title'],
-                        'link': a['link'],
-                        'year': a['year'],
-                        'abstract': a['abstract']
-                    } for a in filtered_articles
-                ]
+                articles = filtered_articles
         except aiohttp.ClientError as e:
             st.error(f"Error connecting to PubMed API: {e}")
             return []
@@ -672,6 +683,7 @@ def check_password() -> bool:
 def main():
     st.title('Helpful Answers with AI!')
     db_path = get_db_path()
+    api_key = st.secrets["OPENAI_API_KEY"]
     # Configure the EmbedChain app based on the selected RAG model
     if rag_model == "o3-mini":
         config = {
