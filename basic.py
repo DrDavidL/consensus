@@ -684,7 +684,7 @@ def create_chat_completion(
     logit_bias=None,
     logprobs=False,
     top_logprobs=None,
-    max_tokens=None,
+    max_completion_tokens=5000,
     n=1,
     presence_penalty=0,
     response_format=None,
@@ -717,7 +717,7 @@ def create_chat_completion(
             "logit_bias": logit_bias,
             "logprobs": logprobs,
             "top_logprobs": top_logprobs,
-            "max_tokens": max_tokens,
+            "max_completion_tokens": max_completion_tokens,
             "n": n,
             "presence_penalty": presence_penalty,
             "response_format": response_format,
@@ -729,6 +729,7 @@ def create_chat_completion(
         }
     if model == "o3-mini":
         params.pop("temperature", None)
+        params["reasoning_effort"] = "medium"
     if stream:
         params["stream_options"] = {"include_usage": include_usage}
     else:
@@ -740,8 +741,6 @@ def create_chat_completion(
         params["response_format"] = {"type": "json_object"}
     elif response_format == "text":
         params["response_format"] = {"type": "text"}
-    else:
-        params.pop("response_format", None)
     params = {k: v for k, v in params.items() if v is not None}
     completion = client.chat.completions.create(**params)
     return completion
