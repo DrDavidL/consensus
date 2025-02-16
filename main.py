@@ -1,5 +1,4 @@
 import requests
-import wolframalpha
 from openai import OpenAI
 import re
 import streamlit as st
@@ -11,25 +10,28 @@ import streamlit as st
 
 api_key = st.secrets["OPENAI_API_KEY"]
 
+
 # This function processes user input through the ChatGPT API
 def GPTQuery(myInput):
     api_key = st.secrets["OPENAI_API_KEY"]
     client = OpenAI(api_key=api_key)
     completion = client.chat.completions.create(
         model="gpt-4o",
-        temperature=0.2,   # Lower temperature values make the output less random
+        temperature=0.2,  # Lower temperature values make the output less random
         max_tokens=2000,
         # Instruct the model on how to process certain inputs:
         messages=[
-            {"role": "system", "content": "You are a helpful assistant. However, if you're asked to provide an answer "
-                                          "to a calculation or purely factual or analytical question that could "
-                                          "reasonably be answered by Wolfram Alpha, delegate to Wolfram Alpha instead "
-                                          "by outputting a query that Wolfram Alpha would understand. Indicate this "
-                                          "scenario by formatting the output exactly like this: Query for "
-                                          "WolframAlpha: <query>"},
+            {
+                "role": "system",
+                "content": "You are a helpful assistant. However, if you're asked to provide an answer "
+                "to a calculation or purely factual or analytical question that could "
+                "reasonably be answered by Wolfram Alpha, delegate to Wolfram Alpha instead "
+                "by outputting a query that Wolfram Alpha would understand. Indicate this "
+                "scenario by formatting the output exactly like this: Query for "
+                "WolframAlpha: <query>",
+            },
             {"role": "user", "content": myInput},
-        ]
-
+        ],
     )
 
     chatGPTresponse = completion.choices[0].message.content
@@ -49,10 +51,7 @@ def wolframQuery(userInput):
     api_key = st.secrets["WOLFRAM_APP_ID"]
     # api_url = "https://api.wolframalpha.com/v1/spoken"
     api_url = "http://api.wolframalpha.com/v2/query"
-    params = {
-        "appid": api_key,
-        "i": userInput
-    }
+    params = {"appid": api_key, "i": userInput}
     # Send the HTTP request to the API endpoint
     response = requests.get(api_url, params=params)
     # Check if the request was successful (i.e., HTTP status code 200)

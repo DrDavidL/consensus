@@ -9,7 +9,7 @@ Task:
 Generate a concise, clinically precise, and actionable response. Fully integrate the provided context to anticipate the user’s underlying needs and deliver maximum clarity. 
 Avoid repetition or unnecessary elaboration. Focus solely on solving the user’s query effectively."""
 
-evaluate_response_prompt ="""#### Instructions:
+evaluate_response_prompt = """#### Instructions:
 Analyze the provided LLM-generated response to identify **unsupported assertions** within the "Current Evidence and Consensus" section. For each unsupported assertion, generate a **Google Scholar search link** using a well-formulated query to investigate the claim.  
 
 #### Provided Context:  
@@ -80,7 +80,7 @@ Analyze the provided LLM-generated response to identify **unsupported assertions
 
 """
 
-evaluate_response_prompt_old ="""#### Instructions:
+evaluate_response_prompt_old = """#### Instructions:
 Carefully evaluate the provided LLM-generated response to a user question with a focus on the section entitled, "
 Consensus View Available from Context", ensuring that the content directly aligns with the provided source materials. Your evaluation should cover both factual accuracy and the potential presence of bias.
 
@@ -185,7 +185,7 @@ Sample partial response how to format a table and google scholar and google sear
 2. What are the latest advancements in solar energy technology?
 3. How does solar energy compare to other renewable energy sources? 
  """
- 
+
 system_prompt_essayist = """I am currently in the process of finalizing an essay for my college senior-year course, and I aim to refine it to the highest academic standard possible before submission. The essay explores the evolving dynamics of urban development and its environmental impact. While I believe the core content is solid, I am seeking assistance to elevate the essay to achieve excellence in academic writing, specifically tailored for a sophomore college level. **Could you provide an optimized version of my draft incorporating the following enhancements?**
 
 1. **Thematic Depth and Complexity:** Elevate the essay's intellectual rigor by deepening the analysis of urban development's environmental implications. How can the thematic exploration be made more nuanced and multifaceted?
@@ -332,7 +332,7 @@ Detailed Answer:[up to 4 paragraphs]
 <Markdown Google Search for optimized user topic searches>
 """
 
-optimize_search_terms_system_prompt ="""You are a highly specialized AI designed to optimize search queries for medical professionals. Your task is to 
+optimize_search_terms_system_prompt = """You are a highly specialized AI designed to optimize search queries for medical professionals. Your task is to 
 take a poorly worded question and transform it into precise search terms that will yield high-quality, evidence-based results on Google. Use the 
 following guidelines and examples to create the optimal search query. Do not provide any commentary or additional information to the user. Only output 
 the optimal search terms.
@@ -624,7 +624,6 @@ prepare_rag_query = """You are assisting a physician by refining their query to 
 """
 
 
-
 prepare_rag_query_old = """**System:** You are an advanced query optimization assistant for a Retrieval-Augmented Generation (RAG) pipeline. Your primary task is to refine a user's original question to enhance retrieval precision in a semantic search of vector databases containing diverse sources like Google and PubMed. Your objective is to improve retrieval effectiveness by balancing specificity with comprehensiveness while retaining the original query intent.
 
 Follow these steps to optimize the query:
@@ -736,7 +735,7 @@ rag_prompt2 = """You assess information provided for practicing clinicians; no d
 - Begin your response: #### **1. Best Answer from Retrieved Context** ...
 """
 
-rag_prompt_azure ="""**Prompt for Critical Appraisal of Literature**  
+rag_prompt_azure = """**Prompt for Critical Appraisal of Literature**  
 
 **Step 1: Retrieve Context from the Literature on the User's Query:**  
 - Input query: {xml_query} and today's date: {current_datetime}
@@ -938,16 +937,15 @@ site:www.aimedicaljournal.com OR
 site:www.himss.org
 """
 
-tavily_domains =[
-      "www.nih.gov",
-      "www.ncbi.nlm.nih.gov",
-      "www.medicalnewstoday.com",
-      "www.cdc.gov",
-      "www.ncbi.nlm.nih.gov/books",
-      "www.medscape.com",
-      "dynamed.com",
-      "www.uptodate.com",
-      
+tavily_domains = [
+    "www.nih.gov",
+    "www.ncbi.nlm.nih.gov",
+    "www.medicalnewstoday.com",
+    "www.cdc.gov",
+    "www.ncbi.nlm.nih.gov/books",
+    "www.medscape.com",
+    "dynamed.com",
+    "www.uptodate.com",
 ]
 
 tavily_domains_full = [
@@ -1026,7 +1024,7 @@ tavily_domains_full = [
     "www.tga.gov.au",
     "www.hc-sc.gc.ca",
     "www.aimedicaljournal.com",
-    "www.himss.org"
+    "www.himss.org",
 ]
 
 
