@@ -210,20 +210,21 @@ with st.sidebar:
     else:
         st.write("text-embedding-3-small model selected.")
         embedder_model = "text-embedding-3-small"
-    st.divider()
-    st.info(
-        "GPT-4o-mini performs well for other options. For more complex synthesis, stay with GPT-4o or use Claude-3.5 Sonnet."
-    )
+    # st.divider()
+    # st.info(
+    #     "GPT-4o-mini performs well for other options. For more complex synthesis, stay with GPT-4o or use Claude-3.5 Sonnet."
+    # )
 
     # RAG model options
-    rag_model_choice = st.radio(
-        "RAG Model Options",
-        ["GPT-4o-mini", "GPT-4o", "Gemini-2"],
-        index=1,
-        help="Select the RAG model to use for the AI responses.",
-    )
+    rag_model_choice = "GPT-4o"
+    # rag_model_choice = st.radio(
+    #     "RAG Model Options",
+    #     ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet", "Gemini-2"],
+    #     index=1,
+    #     help="Select the RAG model to use for the AI responses.",
+    # )   
     if rag_model_choice == "GPT-4o":
-        st.write("GPT-4o model selected.")
+        # st.write("GPT-4o model selected.")
         rag_model = "gpt-4o"
         rag_provider = "openai"
         rag_key = api_key
@@ -246,7 +247,7 @@ with st.sidebar:
 
     # Second review model options
     second_review_model = st.radio(
-        "Second Review Model Options",
+        "Content Augmented Model Options",
         ["GPT-4o-mini", "GPT-4o", "o3-mini", "Claude-3.5 Sonnet", "Gemini-2"],
         index=2,
         help="Select the RAG model to use for the AI responses.",
@@ -294,6 +295,73 @@ with st.sidebar:
 #########################################
 # Utility Functions
 #########################################
+
+def is_non_informative(context: str) -> bool:
+    """
+    Returns True if the citation context is deemed non-informative.
+    The following criteria are used:
+      1. The context is empty or very short.
+      2. The context appears to be a simple author name or follows a basic name pattern.
+      3. The context appears to be a publication reference block 
+         (e.g., includes markers like "PMID:" or "doi:" multiple times).
+      4. The context appears to be a disclosure or print prompt block.
+    """
+    context = context.strip()
+    
+    # Criterion 1: Empty or very short context
+    if not context or len(context) < 5:
+        return True
+
+    # Criterion 2: Simple name patterns
+    name_pattern = re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?$')
+    if name_pattern.fullmatch(context):
+        return True
+
+    author_et_al_pattern = re.compile(r'^[A-Z][a-z]+\s+et\s+al\.?$', re.IGNORECASE)
+    if author_et_al_pattern.fullmatch(context):
+        return True
+
+    # Criterion 3: Check for publication reference block characteristics
+    doi_matches = re.findall(r'\bdoi:\s*\S+', context, re.IGNORECASE)
+    pmid_matches = re.findall(r'\bPMID:\s*\d+', context)
+    
+    if len(context) > 200 and (len(doi_matches) >= 1 or len(pmid_matches) >= 1):
+        return True
+
+    if context.count("et al") > 1 or re.search(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b', context):
+        if len(context) > 150:
+            return True
+
+    # Criterion 4: Check for disclosure or print prompt blocks
+    # If the text contains multiple "Disclosure:" lines or print prompts, consider it non-informative.
+    if context.count("Disclosure:") > 1:
+        return True
+
+    if "Print this section" in context or "What would you like to print?" in context:
+        return True
+
+    # Additional check: if the context is overly long and contains many line breaks or common website phrases
+    if len(context) > 500 and ("Medscape" in context or "Copyright" in context):
+        return True
+
+    return False
+
+def filter_citations(citations: list) -> list:
+    """
+    Given a list of citation dictionaries, filter out those entries where the 'context'
+    is deemed non-informative. URLs are retained as part of the final dictionary.
+    """
+    return [
+        {
+            "context": citation.get("context", ""),
+            "url": citation.get("metadata", {}).get("url", ""),
+            "score": citation.get("metadata", {}).get("score", 0),
+        }
+        for citation in citations
+        if not is_non_informative(citation.get("context", ""))
+    ]
+
+
 def extract_and_format_urls(tavily_output):
     """
     Extracts all URLs from the Tavily output and returns a formatted string
@@ -871,10 +939,10 @@ def main():
                 "config": {"api_key": api_key, "model": embedder_model},
             },
             "chunker": {
-                "chunk_size": 1000,
-                "chunk_overlap": 50,
+                "chunk_size": 5000,
+                "chunk_overlap": 100,
                 "length_function": "len",
-                "min_chunk_size": 200,
+                "min_chunk_size": 2000,
             },
         }
     else:
@@ -901,10 +969,10 @@ def main():
                 "config": {"api_key": api_key, "model": embedder_model},
             },
             "chunker": {
-                "chunk_size": 1000,
-                "chunk_overlap": 50,
+                "chunk_size": 5000,
+                "chunk_overlap": 100,
                 "length_function": "len",
-                "min_chunk_size": 200,
+                "min_chunk_size": 2000,
             },
         }
     app = App.from_config(config=config)
@@ -1154,7 +1222,7 @@ def main():
                                 app.add(site, data_type="web_page")
                             except Exception:
                                 blocked_sites.append(site)
-                    query_config = BaseLlmConfig(number_documents=15, model=rag_model)
+                    # query_config = BaseLlmConfig(number_documents=15, model=rag_model)
                     with st.spinner("Analyzing retrieved content..."):
                         try:
                             current_datetime = datetime.now().strftime(
@@ -1179,7 +1247,7 @@ def main():
                         except Exception as e:
                             st.error(f"Error during rag prep {e}")
                         try:
-                            citations = app.search(updated_rag_query, num_documents=8)
+                            citations = app.search(updated_rag_query, num_documents=20)
                             # citations = [item['metadata']['url'] for item in semantic_results]
                             filtered_citations = [
                                 {
@@ -1191,7 +1259,9 @@ def main():
                                 }
                                 for citation in citations
                             ]
-                            st.session_state.citations = filtered_citations
+                            
+                            filtered = filter_citations(filtered_citations)
+                            st.session_state.citations = filtered
                             # st.markdown(f"**Citations just after filtering:** {filtered_citations}")
                         except Exception as e:
                             st.error(f"Error during semantic query: {e}")
