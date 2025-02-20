@@ -124,6 +124,11 @@ if "tavily_urls" not in st.session_state:
 # Sidebar Configuration: UI Elements & Settings
 #########################################
 with st.sidebar:
+    st.title("System Settings")
+    st.info(
+        "This app uses AI models to provide helpful answers. "
+        "Please adjust the settings as needed."
+    )
     # Toggle for subject area model
     topic_model_choice = st.toggle(
         "Subject Area: Use GPT-4o",
@@ -1264,21 +1269,26 @@ def main():
                             st.error(f"Error during rag prep {e}")
                         try:
                             citations = app.search(updated_rag_query,where=None,num_documents=20)
-                            print(citations)
+                            # with st.expander("View full Citations"):
+                            #     display_citations(citations)
+                            #     st.write(f'Just the raw{citations}')
+                            # print(citations)
                             # citations = [item['metadata']['url'] for item in semantic_results]
-                            filtered_citations = [
-                                {
-                                    "context": citation.get("context", ""),
-                                    "url": citation.get("metadata", {}).get("url", ""),
-                                    "score": citation.get("metadata", {}).get(
-                                        "score", 0
-                                    ),
-                                }
-                                for citation in citations
-                            ]
+                            # filtered_citations = [
+                            #     {
+                            #         "context": citation.get("context", ""),
+                            #         "url": citation.get("metadata", {}).get("url", ""),
+                            #         "score": citation.get("metadata", {}).get(
+                            #             "score", 0
+                            #         ),
+                            #     }
+                            #     for citation in citations
+                            # ]
                             
-                            filtered = filter_citations(filtered_citations)
-                            print(filtered)
+                            filtered = filter_citations(citations)
+                            # with st.expander("View Filtered Citations"):
+                            #     display_citations(filtered)
+                            #     st.write(f'Just the filtered full{filtered}')
                             st.session_state.citations = filtered
                             # st.markdown(f"**Citations just after filtering:** {filtered_citations}")
                         except Exception as e:
