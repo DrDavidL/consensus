@@ -296,6 +296,8 @@ with st.sidebar:
 # Utility Functions
 #########################################
 
+import re
+
 def is_non_informative(context: str) -> bool:
     """
     Returns True if the citation context is deemed non-informative.
@@ -303,7 +305,8 @@ def is_non_informative(context: str) -> bool:
       1. The context is empty or very short.
       2. The context appears to be a simple author name or follows a basic name pattern.
       3. The context appears to be a publication reference block 
-         (e.g., includes markers like "PMID:" or "doi:" multiple times).
+         (e.g., includes markers like "PMID:" or "doi:" multiple times, numbered references,
+          or repeated mentions of "PubMed:"/ "PMC").
       4. The context appears to be a disclosure or print prompt block.
     """
     context = context.strip()
@@ -321,26 +324,42 @@ def is_non_informative(context: str) -> bool:
     if author_et_al_pattern.fullmatch(context):
         return True
 
+    # New Criterion: Check if combined PubMed and PMC mentions exceed 5.
+    pubmed_mentions = len(re.findall(r'PubMed:', context, flags=re.IGNORECASE))
+    pmc_mentions = len(re.findall(r'PMC', context, flags=re.IGNORECASE))
+    if (pubmed_mentions + pmc_mentions) > 5:
+        return True
+
     # Criterion 3: Check for publication reference block characteristics
     doi_matches = re.findall(r'\bdoi:\s*\S+', context, re.IGNORECASE)
     pmid_matches = re.findall(r'\bPMID:\s*\d+', context)
     
-    if len(context) > 200 and (len(doi_matches) >= 1 or len(pmid_matches) >= 1):
+    # Density check for DOIs/PMIDs
+    if (len(doi_matches) + len(pmid_matches)) > 3:
         return True
 
+    # Check for reference numbering pattern (e.g., "47." or "1.")
+    numbered_ref_pattern = re.compile(r'^\d+\.\s', re.MULTILINE)
+    if len(numbered_ref_pattern.findall(context)) > 3:
+        return True
+
+    # Check for month abbreviations in longer contexts with multiple "et al" mentions
     if context.count("et al") > 1 or re.search(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b', context):
         if len(context) > 150:
             return True
 
-    # Criterion 4: Check for disclosure or print prompt blocks
-    # If the text contains multiple "Disclosure:" lines or print prompts, consider it non-informative.
+    # Criterion 4: Disclosure or print prompt blocks
     if context.count("Disclosure:") > 1:
         return True
 
     if "Print this section" in context or "What would you like to print?" in context:
         return True
 
-    # Additional check: if the context is overly long and contains many line breaks or common website phrases
+    # Additional check: High line-break density typical in reference blocks
+    if context.count('\n') > 5:
+        return True
+
+    # Additional check: Overly long contexts with common website cues
     if len(context) > 500 and ("Medscape" in context or "Copyright" in context):
         return True
 
@@ -360,7 +379,6 @@ def filter_citations(citations: list) -> list:
         for citation in citations
         if not is_non_informative(citation.get("context", ""))
     ]
-
 
 def extract_and_format_urls(tavily_output):
     """

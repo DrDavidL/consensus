@@ -24,7 +24,7 @@ cachetools==5.3.3
 certifi==2024.7.4
 charset-normalizer==3.3.2
 chroma-hnswlib==0.7.6
-chromadb>=0.5.10,<0.6.0
+chromadb==0.5.23
 clarifai==10.5.3
 clarifai-grpc==10.6.1
 click==8.1.7
