@@ -126,8 +126,7 @@ if "tavily_urls" not in st.session_state:
 with st.sidebar:
     st.title("System Settings")
     st.info(
-        "This app uses AI models to provide helpful answers. "
-        "Please adjust the settings as needed."
+        "Default settings are fine for most use cases!"
     )
     # Toggle for subject area model
     topic_model_choice = st.toggle(
