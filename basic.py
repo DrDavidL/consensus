@@ -1240,14 +1240,13 @@ def main():
                                 model="gpt-4o-mini",
                                 temperature=0.3,
                             )
-                            updated_rag_query = (
-                                query_for_rag.choices[0].message.content
-                                + "\n\n User is a physician; full technical details and no disclaimers."
-                            )
+                            updated_rag_query = query_for_rag.choices[0].message.content
+
                         except Exception as e:
                             st.error(f"Error during rag prep {e}")
                         try:
-                            citations = app.search(updated_rag_query, num_documents=20)
+                            citations = app.search(updated_rag_query,where=None,num_documents=20)
+                            print(citations)
                             # citations = [item['metadata']['url'] for item in semantic_results]
                             filtered_citations = [
                                 {
@@ -1261,6 +1260,7 @@ def main():
                             ]
                             
                             filtered = filter_citations(filtered_citations)
+                            print(filtered)
                             st.session_state.citations = filtered
                             # st.markdown(f"**Citations just after filtering:** {filtered_citations}")
                         except Exception as e:
