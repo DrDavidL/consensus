@@ -228,7 +228,7 @@ class MyApp:
         chunks the text, embeds each chunk, and adds it to the Chroma collection.
         """
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"}, timeout=10)
             response.raise_for_status()
             raw_content = response.text
             cleaned_content = clean_html(raw_content)
