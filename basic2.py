@@ -301,7 +301,7 @@ def is_non_informative(context: str) -> bool:
         return True
     doi_matches = re.findall(r'\bdoi:\s*\S+', context, re.IGNORECASE)
     pmid_matches = re.findall(r'\bPMID:\s*\d+', context)
-    if (len(doi_matches) + len(pmid_matches)) > 3:
+    if (len(doi_matches) + len(pmid_matches)) > 5:
         return True
     numbered_ref_pattern = re.compile(r'^\d+\.\s', re.MULTILINE)
     if len(numbered_ref_pattern.findall(context)) > 3:
@@ -311,12 +311,7 @@ def is_non_informative(context: str) -> bool:
             return True
     if context.count("Disclosure:") > 1:
         return True
-    if "Print this section" in context or "What would you like to print?" in context:
-        return True
-    if context.count('\n') > 5:
-        return True
-    if len(context) > 500 and ("Medscape" in context or "Copyright" in context):
-        return True
+
     return False
 
 def filter_citations(citations: list) -> list:
@@ -324,11 +319,12 @@ def filter_citations(citations: list) -> list:
         {
             "context": citation.get("context", ""),
             "url": citation.get("metadata", {}).get("url", ""),
-            "score": citation.get("metadata", {}).get("score", 0),
+            "score": citation.get("score", 0),  # Use the top-level score
         }
         for citation in citations
         if not is_non_informative(citation.get("context", ""))
     ]
+
 
 def extract_and_format_urls(tavily_output):
     results = tavily_output.get("results", [])
