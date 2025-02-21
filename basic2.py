@@ -184,7 +184,7 @@ def clean_html(html_content: str) -> str:
 
 class MyApp:
     """
-    A simple replacement for EmbedChain using a Chroma vectorstore.
+    An app for storing embeddings in a Chroma vectorstore.
     It fetches website content, splits it into chunks, embeds them using the provided OpenAIEmbeddingFunction,
     and saves/retrieves these chunks for semantic search.
     """
