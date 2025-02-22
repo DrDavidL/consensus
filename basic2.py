@@ -167,20 +167,130 @@ class OpenAIEmbeddingFunction:
 # Updated MyApp class using new embedding function
 #########################################
 
+def is_relevant(text: str) -> bool:
+    """
+    Determines if a paragraph is relevant based on medical and technical content.
+    Ignores metadata-heavy or generic sections.
+    """
+    irrelevant_patterns = [
+        r"^The site is secure",
+        r"^An official website of the",
+        r"^PubMed Disclaimer",
+        r"^Keywords:",
+        r"^References",
+        r"^Funding:",
+        r"^Conflict of Interest",
+        r"^National Library of Medicine"
+    ]
+    
+    for pattern in irrelevant_patterns:
+        if re.match(pattern, text):
+            return False
+    
+    # Ensure the paragraph has medical/scientific keywords
+    relevant_keywords = ["infection", "treatment", "risk", "disease", "pathogenesis", "mortality", "morbidity"]
+    return any(word in text.lower() for word in relevant_keywords)
+
 
 def clean_html(html_content: str) -> str:
     """
-    Cleans HTML content by stripping tags, script/style elements,
-    and extra whitespace, returning plain text.
+    Cleans HTML content by stripping tags, script/style elements, and extra whitespace,
+    then segments the plain text while ensuring relevance.
     """
-    soup = BeautifulSoup(html_content, "html.parser")
+    soup = BeautifulSoup(html_content, "lxml")  # Faster parser
+
     # Remove script and style elements
     for element in soup(["script", "style"]):
-        element.decompose()
-    # Get text and collapse multiple spaces/newlines
-    text = soup.get_text(separator=" ")
-    cleaned_text = " ".join(text.split())
-    return cleaned_text
+        element.extract()
+
+    # Extract paragraphs while preserving structure
+    paragraphs = [p.get_text(separator=" ").strip() for p in soup.find_all("p") if p.get_text(strip=True)]
+    
+    # If no paragraphs, fall back to whole text
+    if not paragraphs:
+        text = soup.get_text(separator=" ")
+        text = re.sub(r"\s+", " ", text).strip()
+        return segment_text([process_chunk(text)], min_size=3000, max_size=5000, separator="\n---\n")
+
+    # Process and segment relevant paragraphs
+    processed_paragraphs = [process_chunk(p) for p in paragraphs if is_relevant(p)]
+    return segment_text(processed_paragraphs, min_size=3000, max_size=5000, separator="\n---\n")
+
+def segment_text(paragraphs: List[str], min_size=3000, max_size=5000, separator="\n---\n") -> str:
+    """
+    Segments text into chunks that:
+    - Start at the beginning of a topic (not mid-sentence)
+    - End at a paragraph boundary
+    - Maintain logical groupings of content
+    """
+    segments = []
+    current_chunk = ""
+
+    for paragraph in paragraphs:
+        if len(current_chunk) + len(paragraph) < max_size:
+            current_chunk += paragraph + "\n\n"
+        else:
+            if len(current_chunk) >= min_size:
+                segments.append(current_chunk.strip())
+                current_chunk = paragraph + "\n\n"
+            else:
+                current_chunk += paragraph + "\n\n"  # If too small, keep adding
+
+    if current_chunk:
+        segments.append(current_chunk.strip())  # Append the last chunk
+
+    return separator.join(segments)
+
+
+def process_chunk(chunk: str) -> str:
+    """
+    Cleans and compresses a chunk of text by:
+    - Removing irrelevant sections (disclaimers, legal notes, website security text)
+    - Summarizing verbose sections while maintaining readability
+    - Filtering out noise like 'FIG 1' or 'Keywords'
+    """
+    patterns_to_remove = [
+        r"An official website of the United States government.*?",  # Government notices
+        r"The site is secure.*?",  # Website security text
+        r"PubMed Disclaimer.*?",  # PubMed metadata
+        r"Connect with NLM.*?",  # National Library of Medicine metadata
+        r"Keywords:.*?",  # Keyword lists
+        r"FIG \d+.*?",  # Figure references
+        r"MeSH PMC Bookshelf Disclaimer.*?",  # Miscellaneous disclaimers
+        r"\bReferences\b.*",  # Reference sections
+        r"\bConflicts of Interest\b.*",  # Conflict of interest statements
+    ]
+    
+    # Remove irrelevant sections
+    for pattern in patterns_to_remove:
+        chunk = re.sub(pattern, "", chunk, flags=re.DOTALL).strip()
+
+    # Summarize core content while keeping medical details
+    chunk = compress_text(chunk)
+    
+    return chunk
+
+
+def compress_text(text: str, max_length: int = 1000) -> str:
+    """
+    Compresses text while maintaining readability and core medical content.
+    Uses sentence compression and key information extraction.
+    """
+    sentences = re.split(r'(?<=[.!?])\s+', text)  # Split at sentence boundaries
+    summary = []
+    word_count = 0
+    
+    for sentence in sentences:
+        if len(sentence.split()) < 5:  # Skip very short, non-informative sentences
+            continue
+        
+        if word_count + len(sentence.split()) > max_length:  # Stop when reaching max length
+            break
+        
+        summary.append(sentence)
+        word_count += len(sentence.split())
+    
+    return " ".join(summary)
 
 class MyApp:
     """
@@ -210,17 +320,13 @@ class MyApp:
             name=self.collection_name,
             embedding_function=self.embedding_fn
         )
+    
 
-    def chunk_text(self, text: str) -> List[str]:
-        """Split text into chunks using a simple sliding window approach."""
-        chunks = []
-        start = 0
-        text_length = len(text)
-        while start < text_length:
-            end = start + self.chunk_size
-            chunks.append(text[start:end])
-            start += self.chunk_size - self.chunk_overlap
-        return chunks
+    def chunk_text(self, text: str, separator="\n---\n") -> List[str]:
+        """
+        Splits text into chunks based on a predefined separator instead of a fixed-size sliding window.
+        """
+        return text.split(separator)
 
     def add(self, url: str, data_type: str = "web_page") -> None:
         """
@@ -228,7 +334,7 @@ class MyApp:
         chunks the text, embeds each chunk, and adds it to the Chroma collection.
         """
         try:
-            response = requests.get(url, headers = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"}, timeout=10)
+            response = requests.get(url, headers = {"User-Agent": "Mozilla/5.0"}, timeout=10)
             response.raise_for_status()
             raw_content = response.text
             cleaned_content = clean_html(raw_content)
@@ -239,7 +345,6 @@ class MyApp:
         chunks = self.chunk_text(cleaned_content)
         for i, chunk in enumerate(chunks):
             embedding = self.embedding_fn(chunk)
-            # Generate a unique ID for each chunk
             doc_id = f"{url}_{i}"
             self.collection.add(
                 documents=[chunk],
@@ -247,6 +352,9 @@ class MyApp:
                 metadatas=[{"url": url, "chunk_index": i, "data_type": data_type}],
                 ids=[doc_id],
             )
+
+
+  
     def search(self, query: str, num_documents: int = 20, where: dict = None) -> List[Dict]:
         """Perform a semantic search using the query and return formatted citations."""
         query_embedding = self.embedding_fn(query)
@@ -257,16 +365,25 @@ class MyApp:
             where=where,
         )
         st.write("Raw query results:", results)
+        
         citations = []
-        # Iterate over the returned documents (assuming each key returns a list of lists)
+        
+        # Iterate over returned documents
         for i in range(len(results["documents"][0])):
+            distance = results["distances"][0][i]
+            
+            # Convert ChromaDB's cosine distance to a proper similarity score
+            similarity_score = 1 - (distance / 2)  # Ensures range 0 (worst) to 1 (best)
+            
             citation = {
                 "context": results["documents"][0][i],
                 "metadata": results["metadatas"][0][i],
-                "score": 1 - results["distances"][0][i]  # Convert distance to similarity-like score
+                "score": similarity_score
             }
             citations.append(citation)
+        
         return citations
+
 
 
     def reset(self) -> None:
@@ -345,7 +462,7 @@ def display_url_list(citations):
         st.markdown(f"- [{url}]({url})", unsafe_allow_html=True)
 
 def display_citations(citations):
-    st.markdown("## Sources", unsafe_allow_html=True)
+    st.markdown("## Sources")
     sorted_citations = sorted(citations, key=lambda c: c.get("score", 0), reverse=True)
     for i, citation in enumerate(sorted_citations, start=1):
         normalized_score = round(citation.get("score", 0) * 100, 2)
@@ -354,8 +471,8 @@ def display_citations(citations):
         if url:
             st.markdown(f"[Link to Source]({url})", unsafe_allow_html=True)
         context_text = citation.get("context", "")
-        st.markdown(context_text, unsafe_allow_html=True)
-        st.markdown("---", unsafe_allow_html=True)
+        st.text(context_text)
+        st.markdown("---")
 
 def markdown_to_word(markdown_text):
     doc = Document()
@@ -896,7 +1013,7 @@ def main():
                         except Exception as e:
                             st.error(f"Error during rag prep {e}")
                         try:
-                            citations = app.search(updated_rag_query, num_documents=20)
+                            citations = app.search(updated_rag_query, num_documents=10  )
                             filtered = filter_citations(citations)
                             st.session_state.citations = filtered
                         except Exception as e:
