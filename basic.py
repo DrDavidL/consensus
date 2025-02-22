@@ -449,11 +449,18 @@ def display_citations(citations):
     st.markdown("## Sources", unsafe_allow_html=True)
 
     # Sort the citations by score (highest relevance first)
-    sorted_citations = sorted(citations, key=lambda c: c.get("score", 0), reverse=True)
+    sorted_citations = sorted(citations, key=lambda c: c.get("score", 0), reverse=False)
 
     # Loop over each citation and display the formatted content
     for i, citation in enumerate(sorted_citations, start=1):
-        normalized_score = round(citation.get("score", 0) * 100, 2)
+        # Get raw distance from ChromaDB
+        distance = citation.get("score", 0)
+
+        # Convert ChromaDB's cosine distance to a normalized similarity score (0-1)
+        similarity_score = 1 - (distance / 2)  # Ensures range 0 (worst) to 1 (best)
+        
+        # Ensure score is within valid bounds (0-1) before converting to percentage
+        normalized_score = round(max(0, min(similarity_score, 1)) * 100, 2)
 
         # Create a header with the source number and relevance percentage
         st.markdown(
@@ -471,6 +478,7 @@ def display_citations(citations):
 
         # Add a horizontal rule to separate sources
         st.markdown("---", unsafe_allow_html=True)
+
 
 
 # Convert Markdown text to a Word document
