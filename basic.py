@@ -124,26 +124,40 @@ if "tavily_urls" not in st.session_state:
 # Sidebar Configuration: UI Elements & Settings
 #########################################
 with st.sidebar:
-    st.title("System Settings")
-    st.info(
-        "Default settings are fine for most use cases!"
-    )
-    # Toggle for subject area model
-    topic_model_choice = st.toggle(
-        "Subject Area: Use GPT-4o",
-        help="Toggle to use GPT-4o model for determining if medical; otherwise, 4o-mini.",
-    )
-    if topic_model_choice:
-        st.write("GPT-4o model selected.")
-        topic_model = "gpt-4o"
-    else:
-        st.write("GPT-4o-mini model selected.")
-        topic_model = "gpt-4o-mini"
-    st.divider()
+    st.title("Main Settings")
+    short_use_case = st.radio("Use Case", ["Full Functions", "Helpful PubMed Query", "Helpful Internet Sites"])
 
-    # Web search settings
-    search_type = "all"
-    with st.sidebar.popover("Web Search Settings"):
+    if short_use_case == "Helpful PubMed Query":
+        st.info("Use this option to generate an advanced PubMed query.")
+    elif short_use_case == "Helpful Internet Sites":
+        st.info("Use this option for a list of reliable webites to answer your question.")
+    elif short_use_case == "Model Guidance Only":
+        st.info("Use this option to get model guidance on a question.")
+        st.write("Select the model guidance settings below.")
+
+
+
+    st.divider()
+    with st.sidebar.expander("Advanced Settings"):
+        st.info(
+            "Default settings are fine for most use cases!"
+        )
+        # Toggle for subject area model
+        topic_model_choice = st.toggle(
+            "Subject Area: Use GPT-4o",
+            help="Toggle to use GPT-4o model for determining if medical; otherwise, 4o-mini.",
+        )
+        if topic_model_choice:
+            st.write("GPT-4o model selected.")
+            topic_model = "gpt-4o"
+        else:
+            st.write("GPT-4o-mini model selected.")
+            topic_model = "gpt-4o-mini"
+        st.divider()
+
+        # Web search settings
+        search_type = "all"
+
         site_number = st.number_input(
             "Number of web pages to retrieve:",
             min_value=1,
@@ -162,145 +176,158 @@ with st.sidebar:
             edited_medical_domains = st.text_area(
                 "Edit domains (maintain format pattern):", medical_domains, height=200
             )
-    st.divider()
+        st.divider()
 
-    # PubMed search settings
-    st.sidebar.info("PubMed Search Settings")
-    years_back = st.slider(
-        "Years Back for PubMed Search",
-        min_value=1,
-        max_value=10,
-        value=4,
-        step=1,
-        help="Set the number of years back to search PubMed.",
-    )
-    st.divider()
-    max_results = st.slider(
-        "Number of Abstracts to Review",
-        min_value=3,
-        max_value=20,
-        value=6,
-        step=1,
-        help="Set the number of abstracts to review.",
-    )
-    st.divider()
-    filter_relevance = st.toggle(
-        "Filter Relevance of PubMed searching", value=True, help="Toggle to deselect."
-    )
-    if filter_relevance:
-        relevance_threshold = st.slider(
-            "Relevance Threshold",
-            min_value=0.3,
-            max_value=1.0,
-            value=0.8,
-            step=0.05,
-            help="Set the minimum relevance score to consider an item relevant.",
+        # PubMed search settings
+        years_back = st.slider(
+            "Years Back for PubMed Search",
+            min_value=1,
+            max_value=10,
+            value=4,
+            step=1,
+            help="Set the number of years back to search PubMed.",
         )
-    else:
-        relevance_threshold = 0.75
-        st.write("Top sources will be added to the database regardless.")
-    st.divider()
+        st.divider()
+        max_results = st.slider(
+            "Number of Abstracts to Review",
+            min_value=3,
+            max_value=20,
+            value=6,
+            step=1,
+            help="Set the number of abstracts to review.",
+        )
+        st.divider()
+        filter_relevance = st.toggle(
+            "Filter Relevance of PubMed searching", value=True, help="Toggle to deselect."
+        )
+        if filter_relevance:
+            relevance_threshold = st.slider(
+                "Relevance Threshold",
+                min_value=0.3,
+                max_value=1.0,
+                value=0.8,
+                step=0.05,
+                help="Set the minimum relevance score to consider an item relevant.",
+            )
+        else:
+            relevance_threshold = 0.75
+            st.write("Top sources will be added to the database regardless.")
+        st.divider()
 
-    # Technical settings for embedder model
-    st.sidebar.info("More Technical Settings")
-    st.divider()
-    embedder_model_choice = st.toggle(
-        "Embedder Model: Use text-embedding-3-large",
-        help="Toggle to use text-embedding-3-large.",
-    )
-    if embedder_model_choice:
-        st.write("text-embedding-3-large model selected.")
-        embedder_model = "text-embedding-3-large"
-    else:
-        st.write("text-embedding-3-small model selected.")
-        embedder_model = "text-embedding-3-small"
-    # st.divider()
-    # st.info(
-    #     "GPT-4o-mini performs well for other options. For more complex synthesis, stay with GPT-4o or use Claude-3.5 Sonnet."
-    # )
+        # Technical settings for embedder model
+        st.divider()
+        embedder_model_choice = st.toggle(
+            "Embedder Model: Use text-embedding-3-large",
+            help="Toggle to use text-embedding-3-large.",
+        )
+        if embedder_model_choice:
+            st.write("text-embedding-3-large model selected.")
+            embedder_model = "text-embedding-3-large"
+        else:
+            st.write("text-embedding-3-small model selected.")
+            embedder_model = "text-embedding-3-small"
+        # st.divider()
+        # st.info(
+        #     "GPT-4o-mini performs well for other options. For more complex synthesis, stay with GPT-4o or use Claude-3.5 Sonnet."
+        # )
 
-    # RAG model options
-    rag_model_choice = "GPT-4o"
-    # rag_model_choice = st.radio(
-    #     "RAG Model Options",
-    #     ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet", "Gemini-2"],
-    #     index=1,
-    #     help="Select the RAG model to use for the AI responses.",
-    # )   
-    if rag_model_choice == "GPT-4o":
-        # st.write("GPT-4o model selected.")
-        rag_model = "gpt-4o"
-        rag_provider = "openai"
-        rag_key = api_key
-    elif rag_model_choice == "Gemini-2":
-        st.write("Gemini-2 flash model selected.")
-        rag_model = "gemini-2.0-flash"
-        rag_provider = "google"
-        rag_key = st.secrets["GOOGLE_API_KEY"]
-    elif rag_model_choice == "GPT-4o-mini":
-        st.write("GPT-4o-mini model selected.")
-        rag_model = "gpt-4o-mini"
-        rag_provider = "openai"
-        rag_key = api_key
-    elif rag_model_choice == "Claude-3.5 Sonnet":
-        st.write("Claude-3-5-sonnet-latest model selected.")
-        rag_model = "claude-3-5-sonnet-latest"
-        rag_provider = "anthropic"
-        rag_key = api_key_anthropic
-    st.divider()
+        # RAG model options
+        rag_model_choice = "GPT-4o"
+        # rag_model_choice = st.radio(
+        #     "RAG Model Options",
+        #     ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet", "Gemini-2"],
+        #     index=1,
+        #     help="Select the RAG model to use for the AI responses.",
+        # )   
+        if rag_model_choice == "GPT-4o":
+            # st.write("GPT-4o model selected.")
+            rag_model = "gpt-4o"
+            rag_provider = "openai"
+            rag_key = api_key
+        elif rag_model_choice == "Gemini-2":
+            st.write("Gemini-2 flash model selected.")
+            rag_model = "gemini-2.0-flash"
+            rag_provider = "google"
+            rag_key = st.secrets["GOOGLE_API_KEY"]
+        elif rag_model_choice == "GPT-4o-mini":
+            st.write("GPT-4o-mini model selected.")
+            rag_model = "gpt-4o-mini"
+            rag_provider = "openai"
+            rag_key = api_key
+        elif rag_model_choice == "Claude-3.5 Sonnet":
+            st.write("Claude-3-5-sonnet-latest model selected.")
+            rag_model = "claude-3-5-sonnet-latest"
+            rag_provider = "anthropic"
+            rag_key = api_key_anthropic
+        st.divider()
 
-    # Second review model options
-    second_review_model = st.radio(
-        "Content Augmented Model Options",
-        ["GPT-4o-mini", "GPT-4o", "o3-mini", "Claude-3.5 Sonnet", "Gemini-2"],
-        index=2,
-        help="Select the RAG model to use for the AI responses.",
-    )
-    if second_review_model == "GPT-4o":
-        st.write("GPT-4o model selected.")
-        second_model = "gpt-4o"
-        second_provider = "openai"
-        second_key = api_key
-    elif second_review_model == "Claude-3.5 Sonnet":
-        st.write("Claude-3-5-sonnet-latest model selected.")
-        second_model = "claude-3-5-sonnet-latest"
-        second_provider = "anthropic"
-        second_key = api_key_anthropic
-    elif second_review_model == "GPT-4o-mini":
-        st.write("GPT-4o-mini model selected.")
-        second_model = "gpt-4o-mini"
-        second_provider = "openai"
-        second_key = api_key
-    elif second_review_model == "Gemini-2":
-        st.write("Gemini-2 flash model selected.")
-        second_model = "gemini-2.0-flash"
-        second_provider = "google"
-        second_key = st.secrets["GOOGLE_API_KEY"]
-    elif second_review_model == "o3-mini":
-        st.write("o3-mini reasoning model selected.")
-        second_model = "o3-mini"
-        second_provider = "openai"
-        second_key = api_key
-    st.divider()
+        # Second review model options
+        second_review_model = st.radio(
+            "Content Augmented Model Options",
+            ["GPT-4o-mini", "GPT-4o", "o3-mini", "Claude-3.5 Sonnet", "Gemini-2"],
+            index=2,
+            help="Select the RAG model to use for the AI responses.",
+        )
+        if second_review_model == "GPT-4o":
+            st.write("GPT-4o model selected.")
+            second_model = "gpt-4o"
+            second_provider = "openai"
+            second_key = api_key
+        elif second_review_model == "Claude-3.5 Sonnet":
+            st.write("Claude-3-5-sonnet-latest model selected.")
+            second_model = "claude-3-5-sonnet-latest"
+            second_provider = "anthropic"
+            second_key = api_key_anthropic
+        elif second_review_model == "GPT-4o-mini":
+            st.write("GPT-4o-mini model selected.")
+            second_model = "gpt-4o-mini"
+            second_provider = "openai"
+            second_key = api_key
+        elif second_review_model == "Gemini-2":
+            st.write("Gemini-2 flash model selected.")
+            second_model = "gemini-2.0-flash"
+            second_provider = "google"
+            second_key = st.secrets["GOOGLE_API_KEY"]
+        elif second_review_model == "o3-mini":
+            st.write("o3-mini reasoning model selected.")
+            second_model = "o3-mini"
+            second_provider = "openai"
+            second_key = api_key
+        st.divider()
 
-    # Expert personas model choice
-    experts_model_choice = st.toggle(
-        "3 AI Experts Model: Use GPT-4o",
-        help="Toggle to use GPT-4o model for expert responses; otherwise, o3-mini with reasoning.",
-    )
-    if experts_model_choice:
-        st.write("GPT-4o model selected.")
-        experts_model = "gpt-4o"
-    else:
-        st.write("o3-mini reasoning model selected.")
-        experts_model = "o3-mini"
+        # Expert personas model choice
+        experts_model_choice = st.toggle(
+            "3 AI Experts Model: Use GPT-4o",
+            help="Toggle to use GPT-4o model for expert responses; otherwise, o3-mini with reasoning.",
+        )
+        if experts_model_choice:
+            st.write("GPT-4o model selected.")
+            experts_model = "gpt-4o"
+        else:
+            st.write("o3-mini reasoning model selected.")
+            experts_model = "o3-mini"
 
+        # Check if cutting-edge PubMed research should be included
+        cutting_edge = st.checkbox(
+            "Include Cutting-Edge Research in PubMed (default is consensus review articles)",
+            help="Check to include latest, not yet consensus, articles in the search for medical content.",
+            value=False,
+        )
+        if cutting_edge:
+            pubmed_prompt = cutting_edge_pubmed_prompt
+        else:
+            pubmed_prompt = optimize_pubmed_search_terms_system_prompt
+
+        deeper_dive = st.checkbox(
+            "Deeper Dive",
+            help="Check to include PubMed explicitly with extensive searching.",
+            value=True,
+        )
 
 #########################################
 # Utility Functions
 #########################################
 
-import re
 
 def is_non_informative(context: str) -> bool:
     """
@@ -1035,21 +1062,7 @@ def main():
         col2.write(" ")
         col2.write(" ")
         col2.write(" ")
-        # Check if cutting-edge PubMed research should be included
-        if st.sidebar.checkbox(
-            "Include Cutting-Edge Research in PubMed (default is consensus review articles)",
-            help="Check to include latest, not yet consensus, articles in the search for medical content.",
-            value=False,
-        ):
-            pubmed_prompt = cutting_edge_pubmed_prompt
-        else:
-            pubmed_prompt = optimize_pubmed_search_terms_system_prompt
 
-        deeper_dive = st.sidebar.checkbox(
-            "Deeper Dive",
-            help="Check to include PubMed explicitly with extensive searching.",
-            value=True,
-        )
         if col2.button("Begin Research"):
             # Reset session variables for a new research session
             first_view = True
@@ -1066,6 +1079,121 @@ def main():
             st.session_state.thread_with_tavily_context = []
             st.session_state.tavily_initial_response = []
             with col1:
+                
+                if short_use_case == "Helpful PubMed Query":
+                    pubmed_messages = [
+                        {"role": "system", "content": pubmed_prompt},
+                        {"role": "user", "content": original_query},
+                    ]
+                    response_pubmed_search_terms = create_chat_completion(
+                        pubmed_messages, temperature=0.3
+                    )
+                    pubmed_search_terms = response_pubmed_search_terms.choices[
+                        0
+                    ].message.content
+                    st.session_state.pubmed_search_terms = pubmed_search_terms
+                    st.page_link(
+                        "https://pubmed.ncbi.nlm.nih.gov/?term="
+                        + st.session_state.pubmed_search_terms,
+                        label=":green[Click here to open your consensus focused PubMed search!]",
+                        icon="📚",
+                    )                    
+                    st.stop()
+                    
+                if short_use_case == "Helpful Internet Sites":
+                    with st.spinner("Determining the best domain for your question..."):
+                        restrict_domains_response = create_chat_completion(
+                            determine_domain_messages,
+                            model=topic_model,
+                            temperature=0.3,
+                        )
+                        st.session_state.chosen_domain = (
+                            restrict_domains_response.choices[0].message.content
+                        )
+                    if (
+                        st.session_state.chosen_domain == "medical"
+                        and internet_search_provider == "Google"
+                    ):
+                        domains = (
+                            edited_medical_domains
+                            if edited_medical_domains != medical_domains
+                            else medical_domains
+                        )
+                    else:
+                        if internet_search_provider == "Google":
+                            domains = st.session_state.chosen_domain
+                    try:
+                        if len(app.get_data_sources()) > 0:
+                            app.reset()
+                    except:
+                        st.error("Error resetting app; just proceed")
+
+                    search_messages = [
+                        {
+                            "role": "system",
+                            "content": optimize_search_terms_system_prompt,
+                        },
+                        {
+                            "role": "user",
+                            "content": f"considering it is {current_datetime}, {original_query}",
+                        },
+                    ]
+                    with st.spinner("Optimizing search terms..."):
+                        try:
+                            response_google_search_terms = create_chat_completion(
+                                search_messages, temperature=0.3
+                            )
+                        except Exception as e:
+                            st.error(f"Error during OpenAI call: {e}")
+                    google_search_terms = response_google_search_terms.choices[0].message.content
+                    with st.spinner(f'Searching for "{google_search_terms}"...'):
+                        if internet_search_provider == "Google":
+                            st.session_state.snippets, st.session_state.urls = (
+                                realtime_search(
+                                    google_search_terms, domains, site_number
+                                )
+                            )
+                        else:
+                            three_years_ago = datetime.now() - timedelta(
+                                days=3 * 365.25
+                            )
+                            date_cutoff = three_years_ago.strftime("%Y-%m-%d")
+                            search_response = exa.search_and_contents(
+                                google_search_terms,
+                                text={
+                                    "include_html_tags": False,
+                                    "max_characters": 1000,
+                                },
+                                highlights={
+                                    "highlights_per_url": 2,
+                                    "num_sentences": 5,
+                                    "query": "This is the highlight query:",
+                                },
+                                start_published_date=date_cutoff,
+                            )
+                            st.session_state.snippets = [
+                                result.text for result in search_response.results
+                            ]
+                            st.session_state.urls = [
+                                result.url for result in search_response.results
+                            ]
+                    with st.expander("Internet Sources", expanded=True):
+                        if internet_search_provider == "Google":
+                            for snippet in st.session_state.snippets:
+                                st.markdown(snippet.replace("<END OF SITE>", ""))
+                        else:
+                            for i, snippet in enumerate(st.session_state.snippets):
+                                st.markdown(
+                                    f"### Source {i + 1}: {st.session_state.urls[i]}"
+                                )
+                                st.markdown(snippet)
+                    
+                    
+                    
+                    
+                    
+                    st.stop()
+                    
                 # Deeper Dive: Includes PubMed search and web search
                 if deeper_dive:
                     with st.spinner("Determining the best domain for your question..."):
@@ -1118,7 +1246,7 @@ def main():
                     st.session_state.chosen_domain = (
                         st.session_state.chosen_domain.replace('"', "").replace("'", "")
                     )
-                    if st.session_state.chosen_domain == "medical":
+                    if st.session_state.chosen_domain == "medical" and short_use_case == "Full Functions":
                         pubmed_messages = [
                             {"role": "system", "content": pubmed_prompt},
                             {"role": "user", "content": original_query},

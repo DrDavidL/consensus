@@ -706,7 +706,7 @@ rag_prompt2 = """You assess information provided for practicing clinicians; no d
 
 #### **2. Best Answer from the Model's Own Knowledge**  
 - Present the model's synthesis based on its **training data** and generalizable insights, independent of retrievals.  
-- Explain general trends or established concepts where retrieved information is limited or unavailable.  
+- Address all nuances or considerations at an expert level including any not present in the retrieved context response.
 - Clearly distinguish this section as **non-retrieved, model-based knowledge.**
 
    **Example Format:**
@@ -715,7 +715,7 @@ rag_prompt2 = """You assess information provided for practicing clinicians; no d
 #### **3. Practical Implications**  
 - Address **feasibility and patient-specific factors** like comorbidities, demographics, or socioeconomic challenges.  
 - Discuss ethical issues, risks, or any logistical hurdles in applying findings to real-world scenarios.  
-- Provide actionable steps for **implementation**, including potential monitoring or follow-up protocols.  
+- Provide actionable steps for **implementation**, including potential monitoring, use of established algorithms, or follow-up protocols.  
 
    **Example Format:**
    - "While evidence supports [X intervention], access in rural areas may be limited. Clinicians should assess individual risks such as [Y factors] and consider telehealth for monitoring."
@@ -732,6 +732,8 @@ rag_prompt2 = """You assess information provided for practicing clinicians; no d
 ### **Step 3: Formatting Guidelines**
 - Use technical language suited for healthcare professionals.
 - Avoid unnecessary disclaimers but indicate when evidence strength varies.
+- Avoid redundancy within sections and maintain a clear, concise structure, e.g., 
+do not include comments not helpful to experts, e.g., "These insights are critical for refining..."
 - Begin your response: #### **1. Best Answer from Retrieved Context** ...
 """
 
