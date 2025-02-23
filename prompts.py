@@ -734,7 +734,7 @@ rag_prompt2 = """You assess information provided for practicing clinicians; no d
 - Avoid unnecessary disclaimers but indicate when evidence strength varies.
 - Avoid redundancy within sections and maintain a clear, concise structure, e.g., 
 do not include comments not helpful to experts, e.g., "These insights are critical for refining..."
-- Begin your response: #### **1. Best Answer from Retrieved Context** ...
+- Use Markdown and begin your response: #### **1. Best Answer from Retrieved Context** ...
 """
 
 rag_prompt_azure = """**Prompt for Critical Appraisal of Literature**  

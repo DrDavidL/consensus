@@ -64,7 +64,7 @@ st.set_page_config(
     page_title="Helpful AI",
     layout="wide",
     page_icon=":stethoscope:",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
 api_key = st.secrets["OPENAI_API_KEY"]
 api_key_anthropic = st.secrets["ANTHROPIC_API_KEY"]
@@ -125,7 +125,7 @@ if "tavily_urls" not in st.session_state:
 #########################################
 with st.sidebar:
     st.title("Main Settings")
-    short_use_case = st.radio("Use Case", ["Full Functions", "Helpful PubMed Query", "Helpful Internet Sites"])
+    short_use_case = st.radio("Use Case", ["Answer the Question", "Helpful PubMed Query", "Helpful Internet Sites"])
 
     if short_use_case == "Helpful PubMed Query":
         st.info("Use this option to generate an advanced PubMed query.")
@@ -1246,7 +1246,7 @@ def main():
                     st.session_state.chosen_domain = (
                         st.session_state.chosen_domain.replace('"', "").replace("'", "")
                     )
-                    if st.session_state.chosen_domain == "medical" and short_use_case == "Full Functions":
+                    if st.session_state.chosen_domain == "medical" and short_use_case == "Answer the Question":
                         pubmed_messages = [
                             {"role": "system", "content": pubmed_prompt},
                             {"role": "user", "content": original_query},
