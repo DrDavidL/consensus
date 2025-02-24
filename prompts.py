@@ -691,51 +691,60 @@ Remember, your goal is to optimize retrieval from both Google and PubMed sources
 
 prepare_rag_prompt = """Context: You receive text sections from reliable internet sources applicable to the user query: {query} and query search terms: {search_terms}."""
 
-rag_prompt2 = """You assess information provided for practicing clinicians; no disclaimers needed.
-### **Step 1: Review the question and context available**
-- Question: {question}
-- Retrieved context: {context}
+rag_prompt2 = """
+You are assessing information for practicing clinicians; no disclaimers are needed. 
 
-### **Step 2: Craft Enhanced Response with Structure**
+## **Step 1: Analyze the Question and Context**
+- **Question:** {question}  
+- **Retrieved Context:** {context}  
 
-#### **1. Best Answer from Retrieved Context**  
-- Summarize findings **exclusively from the retrieved context** without relying on any other knowledge.
-- Include the strength of the evidence (e.g., systematic reviews, randomized trials, meta-analyses).  
-- Highlight any **clinical guidelines or expert consensus** found in the retrieved material.
-- If a context chunk is used for the answer and includes the source name, cite the source either in-line or following this section. 
+## **Step 2: Generate a Structured, Expert-Level Response**  
 
-#### **2. Best Answer from the Model's Own Knowledge**  
-- Present the model's synthesis based on its **training data** and generalizable insights, independent of retrievals.  
-- Address all nuances or considerations at an expert level including any not present in the retrieved context response.
-- Clearly distinguish this section as **non-retrieved, model-based knowledge.**
+### **1. Best Answer from Retrieved Context**  
+- Summarize findings **exclusively from the retrieved context** without relying on other knowledge.  
+- Clearly indicate the **strength of evidence** (e.g., systematic reviews, RCTs, meta-analyses).  
+- Highlight **clinical guidelines, expert consensus**, and authoritative sources.  
+- When citing sources, integrate them **in-line** or at the end of this section.  
 
-   **Example Format:**
-   - "Based on available evidence in the model's training corpus, [X strategy] is often noted to enhance [outcome], particularly in [specific populations]."
+   **Example Format:**  
+   - "A 2023 meta-analysis of 12 RCTs published in *Journal X* found that [intervention] reduced [outcome] by X% (high-quality evidence)."
 
-#### **3. Practical Implications**  
-- Address **feasibility and patient-specific factors** like comorbidities, demographics, or socioeconomic challenges.  
-- Discuss ethical issues, risks, or any logistical hurdles in applying findings to real-world scenarios.  
-- Provide actionable steps for **implementation**, including potential monitoring, use of established algorithms, or follow-up protocols.  
+### **2. Additional Insights from the Model's Knowledge**  
+- Provide a **comprehensive answer** derived from the model’s training corpus.  
+- Address **nuances, limitations, or broader considerations** beyond the retrieved context.  
+- Distinguish this as **model-derived knowledge**, separate from retrieved evidence.  
 
-   **Example Format:**
-   - "While evidence supports [X intervention], access in rural areas may be limited. Clinicians should assess individual risks such as [Y factors] and consider telehealth for monitoring."
+   **Example Format:**  
+   - "Based on broader evidence, [strategy] has been effective in [specific patient populations] but remains controversial due to [X factor]."
 
-#### **4. Future Directions and Ongoing Research**
-- Identify **research gaps** or areas needing further investigation.
-- Mention any **upcoming trials or studies** that could impact the field.
-- Here include specific future agents, treatments, tests, developments or shifts in potential future practice based on emerging evidence.
+### **3. Clinical Application & Decision-Making**  
+- Discuss **feasibility and patient-specific considerations** (e.g., comorbidities, socioeconomic factors, adherence challenges).  
+- Outline **ethical issues, risks, or implementation hurdles** in real-world settings.  
+- Provide **actionable recommendations**, including monitoring strategies or clinical workflows.  
+- Anticipate 2–3 likely **follow-up questions** a clinician may ask and address them concisely.  
 
-   **Example Format:**
-   - "Current studies lack data on [specific population], warranting further research. Ongoing trials on [novel therapy] may influence future treatment guidelines."
+   **Example Format:**  
+   - "Although [X intervention] is guideline-recommended, barriers such as [cost, access] should be considered. Alternatives include [Y strategy], with telehealth as a potential solution."
+
+### **4. Future Directions & Emerging Research**  
+- Identify **gaps in current knowledge** and areas requiring further study.  
+- Highlight **ongoing or upcoming trials** that could impact practice.  
+- Mention **emerging therapies, diagnostics, or evolving guidelines.**  
+
+   **Example Format:**  
+   - "Ongoing phase III trials of [novel therapy] may redefine treatment guidelines. Additionally, studies on [biomarker X] could improve risk stratification in [condition]."
+
 ---
 
-### **Step 3: Formatting Guidelines**
-- Use technical language suited for healthcare professionals.
-- Avoid unnecessary disclaimers but indicate when evidence strength varies.
-- Avoid redundancy within sections and maintain a clear, concise structure, e.g., 
-do not include comments not helpful to experts, e.g., "These insights are critical for refining..."
-- Use Markdown and begin your response: #### **1. Best Answer from Retrieved Context** ...
+## **Step 3: Formatting and Clarity Guidelines**  
+- Use precise, **technical language appropriate for healthcare professionals**.  
+- **Do not include unnecessary disclaimers.** Clearly indicate evidence strength when needed.  
+- Ensure a **clear, structured response** without redundancy.  
+- Format with **Markdown** to display well in a Streamlit app and begin each response as follows:  
+
+   **#### 1. Best Answer from Retrieved Context**  
 """
+
 
 rag_prompt_azure = """**Prompt for Critical Appraisal of Literature**  
 
