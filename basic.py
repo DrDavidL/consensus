@@ -264,7 +264,7 @@ with st.sidebar:
         # Second review model options
         second_review_model = st.radio(
             "Content Augmented Model Options",
-            ["GPT-4o-mini", "GPT-4o", "o3-mini", "Claude-3.5 Sonnet", "Gemini-2"],
+            ["GPT-4o-mini", "GPT-4o", "o3-mini", "Claude-3.7 Sonnet", "Gemini-2"],
             index=2,
             help="Select the RAG model to use for the AI responses.",
         )
@@ -273,9 +273,9 @@ with st.sidebar:
             second_model = "gpt-4o"
             second_provider = "openai"
             second_key = api_key
-        elif second_review_model == "Claude-3.5 Sonnet":
-            st.write("Claude-3-5-sonnet-latest model selected.")
-            second_model = "claude-3-5-sonnet-latest"
+        elif second_review_model == "Claude-3.7 Sonnet":
+            st.write("Claude-3-7-sonnet model selected.")
+            second_model = "claude-3-7-sonnet-20250219"
             second_provider = "anthropic"
             second_key = api_key_anthropic
         elif second_review_model == "GPT-4o-mini":
