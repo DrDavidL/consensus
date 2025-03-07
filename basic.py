@@ -4,6 +4,7 @@
 import asyncio
 import json
 import re
+import os
 import tempfile
 import time
 from datetime import datetime, timedelta
@@ -24,6 +25,7 @@ from tavily import TavilyClient
 
 from embedchain import App
 from embedchain.config import BaseLlmConfig
+
 
 import logging
 
@@ -216,16 +218,27 @@ with st.sidebar:
 
         # Technical settings for embedder model
         st.divider()
-        embedder_model_choice = st.toggle(
-            "Embedder Model: Use text-embedding-3-large",
-            help="Toggle to use text-embedding-3-large.",
+        embedder_model_choice = st.radio(
+            "Embedder Model Options",
+            ["text-embedding-3-small", "text-embedding-3-large", "gemini-embedding-exp-03-07"],
+            index=1,
+            help="Select the embedder model to use for the AI responses.",
         )
-        if embedder_model_choice:
-            st.write("text-embedding-3-large model selected.")
-            embedder_model = "text-embedding-3-large"
-        else:
+        if embedder_model_choice == "text-embedding-3-small":
             st.write("text-embedding-3-small model selected.")
             embedder_model = "text-embedding-3-small"
+            embedder_provider = "openai"
+            embedder_api_key = api_key
+        elif embedder_model_choice == "text-embedding-3-large":
+            st.write("text-embedding-3-large model selected.")
+            embedder_model = "text-embedding-3-large"
+            embedder_provider = "openai"
+            embedder_api_key = api_key
+        elif embedder_model_choice == "gemini-embedding-exp-03-07":
+            st.write("gemini-embedding-exp-03-07 model selected.")
+            embedder_model = "models/gemini-embedding-exp-03-07"
+            embedder_provider = "google"
+            os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
         # st.divider()
         # st.info(
         #     "GPT-4o-mini performs well for other options. For more complex synthesis, stay with GPT-4o or use Claude-3.5 Sonnet."
@@ -979,6 +992,10 @@ def main():
     # Configure the EmbedChain app based on the selected RAG model
     rag_model = "o3-mini"
     rag_provider = "openai"
+    if embedder_provider == "google":
+        embedder_config = {"model": embedder_model}
+    else:
+        embedder_config = {"api_key": embedder_api_key, "model": embedder_model}
     if rag_model == "o3-mini":
         config = {
             "llm": {
@@ -994,8 +1011,8 @@ def main():
                 },
             },
             "embedder": {
-                "provider": "openai",
-                "config": {"api_key": api_key, "model": embedder_model},
+                "provider": embedder_provider,
+                "config": embedder_config
             },
             "chunker": {
                 "chunk_size": 5000,
@@ -1024,8 +1041,8 @@ def main():
                 },
             },
             "embedder": {
-                "provider": "openai",
-                "config": {"api_key": api_key, "model": embedder_model},
+                "provider": embedder_provider,
+                "config": embedder_config
             },
             "chunker": {
                 "chunk_size": 5000,
