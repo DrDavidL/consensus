@@ -29,6 +29,107 @@ from embedchain.config import BaseLlmConfig
 
 import logging
 
+import re
+from typing import List
+from embedchain.chunkers.base_chunker import BaseChunker
+
+
+from embedchain.chunkers.base_chunker import BaseChunker
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+import re
+
+import re
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+import re
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+class CustomMedicalChunker(BaseChunker):
+    def __init__(self, min_size=3000, max_size=5000, separator="\n---\n"):
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=max_size,
+            chunk_overlap=100,
+            separators=[". ", "\n\n", "\n", " ", ""]
+        )
+        super().__init__(text_splitter=text_splitter)
+        self.min_size = min_size
+        self.max_size = max_size
+        self.separator = separator
+
+    def compress_text(self, text: str) -> str:
+        text = ' '.join(text.split())
+        text = re.sub(r'\n+', '\n', text)
+        text = re.sub(r'\(.*?\)', '', text)
+        return text.strip()
+
+    def create_chunks(self, loader, src):
+        documents = loader.load_data(src)
+        chunks = []
+
+        for doc in documents:
+            # Ensure compatibility with dict input
+            content = doc.get('abstract', '') if isinstance(doc, dict) else getattr(doc, 'content', '')
+            meta = {k: v for k, v in doc.items() if k != 'abstract'} if isinstance(doc, dict) else getattr(doc, 'meta', {})
+
+            if not content:
+                continue  # skip if no content is found
+
+            paragraphs = content.split('\n\n')
+            segmented_text = self.segment_text(paragraphs)
+            processed_chunks = [
+                self.compress_text(chunk)
+                for chunk in segmented_text.split(self.separator)
+            ]
+
+            for processed_chunk in processed_chunks:
+                if processed_chunk.strip():
+                    chunks.append({
+                        "content": processed_chunk.strip(),
+                        "meta": meta
+                    })
+
+        return chunks
+
+
+    def segment_text(self, paragraphs: list[str]) -> str:
+        segments = []
+        current_chunk = ""
+
+        for paragraph in paragraphs:
+            paragraph = paragraph.strip()
+            if not paragraph:
+                continue
+
+            if len(current_chunk) + len(paragraph) <= self.max_size * 1.1:
+                current_chunk += paragraph + "\n\n"
+            else:
+                sentences = re.split(r'(?<=\.)\s+', current_chunk)
+                rebuilt_chunk = ""
+                for sentence in sentences:
+                    if len(rebuilt_chunk) + len(sentence) <= self.max_size * 1.1:
+                        rebuilt_chunk += sentence + " "
+                    else:
+                        break
+
+                rebuilt_chunk = rebuilt_chunk.strip()
+                if not rebuilt_chunk.endswith('.'):
+                    rebuilt_chunk = '.'.join(rebuilt_chunk.split('.')[:-1]) + '.'
+
+                segments.append(rebuilt_chunk)
+
+                remaining_text = current_chunk[len(rebuilt_chunk):].strip()
+                if remaining_text and not remaining_text[0].isupper():
+                    remaining_sentences = re.split(r'(?<=\.)\s+', remaining_text)
+                    remaining_text = ' '.join(remaining_sentences[1:]).strip()
+
+                current_chunk = remaining_text + " " + paragraph + "\n\n"
+
+        if current_chunk.strip():
+            segments.append(current_chunk.strip())
+
+        return self.separator.join(segments)
+
+
 #########################################
 # Global Variables and Logging Configuration
 #########################################
@@ -892,18 +993,6 @@ def create_chat_completion(
     tool_choice="none",
     user=None,
 ):
-    
-    if model == "o3-mini":
-        # Insert the developer message at the start of the messages list.
-        messages.insert(0, {
-            "role": "developer",
-            "content": [
-                {
-                    "type": "text",
-                    "text": "Formatting re-enabled"
-                }
-            ]
-        })
     if google:
         client = OpenAI(
             api_key=st.secrets["GOOGLE_API_KEY"],
@@ -937,7 +1026,6 @@ def create_chat_completion(
     if model == "o3-mini":
         params.pop("temperature", None)
         params["reasoning_effort"] = "medium"
-
     if stream:
         params["stream_options"] = {"include_usage": include_usage}
     else:
@@ -1028,7 +1116,7 @@ def main():
                 "config": embedder_config
             },
             "chunker": {
-                "chunk_size": 4500,
+                "chunk_size": 5000,
                 "chunk_overlap": 100,
                 "length_function": "len",
                 "min_chunk_size": 2000,
@@ -1065,6 +1153,7 @@ def main():
             },
         }
     app = App.from_config(config=config)
+    chunker = CustomMedicalChunker()
     with st.expander("About this app"):
         st.info(
             """This app interprets a user query and retrieves content from selected internet domains (including PubMed if applicable) for an initial answer and then asks AI personas their opinions on the topic after providing them with updated content. Approaches shown to improve outputs like chain of thought, expert rephrasing, and chain of verification are applied to improve the quality of the responses and to reduce hallucination. Web sites are identified, processed and content selectively retrieved for answers using Real-Time Web Search and the EmbedChain library. The default main LLM model is o3-mini with medium reasoning from OpenAI. App author is David Liebovitz, MD"""
@@ -1318,7 +1407,7 @@ def main():
                                                 raise ValueError(
                                                     "Article does not contain a 'link' key."
                                                 )
-                                            app.add(link, data_type="web_page")
+                                            app.add(link, data_type="web_page", chunker=chunker)
                                             success = True
                                         except Exception as e:
                                             retries -= 1
