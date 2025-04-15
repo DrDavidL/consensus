@@ -103,7 +103,7 @@ kubernetes==30.1.0
 langchain==0.2.7
 langchain-anthropic==0.1.19
 langchain-cohere==0.1.8
-langchain-community==0.2.7
+langchain-community==0.2.9
 langchain-core==0.2.12
 langchain-openai==0.1.14
 langchain-text-splitters==0.2.2
