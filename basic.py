@@ -50,6 +50,7 @@ DOI_PATTERN = re.compile(r'\bdoi:\s*\S+', re.IGNORECASE)
 PMID_PATTERN = re.compile(r'\bPMID:\s*\d+')
 MONTH_PATTERN = re.compile(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b')
 LOWER_UPPER_PATTERN = re.compile(r'([a-z])([A-Z])')
+NUMBERED_REF_PATTERN = re.compile(r'^\d+\.\s', re.MULTILINE)
 
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -485,12 +486,10 @@ def display_url_list(citations):
     The function creates a clickable Markdown list where the URL itself is used as the link text.
     """
     # Extract URLs from each citation if present.
-    urls = [
-        citation.get("url", "") for citation in citations if citation.get("url", "")
-    ]
+    urls = {citation.get("url", "") for citation in citations if citation.get("url", "")}
 
     # Remove duplicate URLs and sort for consistency.
-    unique_urls = sorted(set(urls))
+    unique_urls = sorted(urls)
 
     # Display header.
     st.markdown("**List of Source URLs**", unsafe_allow_html=True)
