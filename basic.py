@@ -242,12 +242,12 @@ with st.sidebar:
                 "Relevance Threshold",
                 min_value=0.3,
                 max_value=1.0,
-                value=0.8,
+                value=0.7,
                 step=0.05,
                 help="Set the minimum relevance score to consider an item relevant.",
             )
         else:
-            relevance_threshold = 0.75
+            relevance_threshold = 0.65
             st.write("Top sources will be added to the database regardless.")
         st.divider()
 
@@ -751,8 +751,8 @@ async def pubmed_abstracts(
                         "role": "system",
                         "content": (
                             "You are an assistant evaluating the relevance of articles to a query. "
-                            "For each article provided, return a relevance score between 0 and 1 as a JSON object mapping "
-                            "the article's ID to its score."
+                            "For each article provided, return a relevance score between 0.0 and 1.0 as a JSON object mapping "
+                            "the article's ID to its score, For example return only: {'12345': 0.9, '67890': 0.7}"
                         ),
                     },
                     {
@@ -760,9 +760,7 @@ async def pubmed_abstracts(
                         "content": (
                             f"Query: {st.session_state.original_question}\n"
                             f"Articles:\n{articles_prompt}\n\n"
-                            "For each article, please provide a relevance score (0 to 1) representing the likelihood that the answer "
-                            "to the query is found in the article. Return your response solely as a JSON object mapping article IDs to scores. "
-                            'For example: {"12345": 0.9, "67890": 0.7}'
+                            "Return a JSON object without additional charactoers."  
                         ),
                     },
                 ]
@@ -772,6 +770,7 @@ async def pubmed_abstracts(
                         response = create_chat_completion(messages, model="o3-mini")
                         # Expecting a JSON string; parse it into a dictionary.
                         response_content = response.choices[0].message.content.strip()
+                        # st.write(f"Response content: {response_content}")
                         logger.debug(f"Response content before parsing: {response_content}")
                         if not response_content:
                             logger.error("Empty response content received.")
@@ -779,6 +778,7 @@ async def pubmed_abstracts(
                         else:
                             try:
                                 relevance_scores = json.loads(response_content)
+                                # st.write(f"Relevance scores: {relevance_scores}")
                             except json.JSONDecodeError as e:
                                 logger.error(f"Error parsing JSON response: {e}")
                                 logger.debug(f"Response content: {response_content}")
@@ -791,6 +791,7 @@ async def pubmed_abstracts(
                             if float(relevance_scores.get(str(article["id"]), 0))
                             >= relevance_threshold
                         ]
+                        # st.write(f"Total relevant articles found: {len(relevant_articles)}")
                     except Exception as e:
                         logger.error(f"Error filtering articles: {e}")
                         # In case of an error, fallback to using all filtered articles.
