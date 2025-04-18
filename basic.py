@@ -40,6 +40,10 @@ role_emojis = {
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+NAME_PATTERN = re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?$')
+AUTHOR_ET_AL_PATTERN = re.compile(r'^[A-Z][a-z]+\s+et\s+al\.?$', re.IGNORECASE)
+NUMBERED_REF_PATTERN = re.compile(r'^\d+\.\s', re.MULTILINE)
+
 #########################################
 # Import Prompts for AI Guidance and Search
 #########################################
@@ -360,12 +364,10 @@ def is_non_informative(context: str) -> bool:
         return True
 
     # Criterion 2: Simple name patterns
-    name_pattern = re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?$')
-    if name_pattern.fullmatch(context):
+    if NAME_PATTERN.fullmatch(context):
         return True
 
-    author_et_al_pattern = re.compile(r'^[A-Z][a-z]+\s+et\s+al\.?$', re.IGNORECASE)
-    if author_et_al_pattern.fullmatch(context):
+    if AUTHOR_ET_AL_PATTERN.fullmatch(context):
         return True
 
     # New Criterion: Check if combined PubMed and PMC mentions exceed 5.
@@ -383,8 +385,7 @@ def is_non_informative(context: str) -> bool:
         return True
 
     # Check for reference numbering pattern (e.g., "47." or "1.")
-    numbered_ref_pattern = re.compile(r'^\d+\.\s', re.MULTILINE)
-    if len(numbered_ref_pattern.findall(context)) > 3:
+    if len(NUMBERED_REF_PATTERN.findall(context)) > 3:
         return True
 
     # Check for month abbreviations in longer contexts with multiple "et al" mentions
