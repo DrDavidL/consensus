@@ -771,11 +771,16 @@ async def pubmed_abstracts(
                         response = create_chat_completion(messages, model="o3-mini")
                         # Expecting a JSON string; parse it into a dictionary.
                         response_content = response.choices[0].message.content.strip()
-                        try:
-                            relevance_scores = json.loads(response_content)
-                        except json.JSONDecodeError as e:
-                            logger.error(f"Error parsing JSON response: {e}")
+                        if not response_content:
+                            logger.error("Empty response content received.")
                             relevance_scores = {}
+                        else:
+                            try:
+                                relevance_scores = json.loads(response_content)
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Error parsing JSON response: {e}")
+                                logger.debug(f"Response content: {response_content}")
+                                relevance_scores = {}
                         # Filter articles based on the returned relevance scores.
                         relevant_articles = [
                             article
