@@ -51,6 +51,29 @@ PMID_PATTERN = re.compile(r'\bPMID:\s*\d+')
 MONTH_PATTERN = re.compile(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b')
 LOWER_UPPER_PATTERN = re.compile(r'([a-z])([A-Z])')
 
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+
+def add_hyperlink(paragraph, url, text, color="0000FF", underline=True):
+    part = paragraph.part
+    r_id = part.relate_to(url, relationship_type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", is_external=True)
+    hyperlink = OxmlElement('w:hyperlink')
+    hyperlink.set(qn('r:id'), r_id)
+    new_run = OxmlElement('w:r')
+    rPr = OxmlElement('w:rPr')
+    if color is not None:
+        c = OxmlElement('w:color')
+        c.set(qn('w:val'), color)
+        rPr.append(c)
+    if underline:
+        u = OxmlElement('w:u')
+        u.set(qn('w:val'), 'single')
+        rPr.append(u)
+    new_run.append(rPr)
+    new_run.text = text
+    hyperlink.append(new_run)
+    paragraph._p.append(hyperlink)
+
 #########################################
 # Import Prompts for AI Guidance and Search
 #########################################
@@ -542,15 +565,22 @@ def markdown_to_word(markdown_text):
         else:
             # Create a paragraph and process inline markdown (e.g., bold formatting)
             p = doc.add_paragraph()
-            # Split the line into segments based on markdown bold '**' and italic '*' markers
-            segments = re.split(r'(\*\*.*?\*\*|\*.*?\*)', line)
+            # Split the line into segments based on hyperlinks, bold '**' and italic '*' markers
+            segments = re.split(r'(\[.*?\]\(.*?\)|\*\*.*?\*\*|\*.*?\*)', line)
             for seg in segments:
-                if seg.startswith("**") and seg.endswith("**"):
-                    # Add bold run without markdown asterisks.
+                if seg.startswith("[") and seg.endswith(")"):
+                    # Process Markdown hyperlink [text](url)
+                    match = re.match(r'\[([^]]+)\]\(([^)]+)\)', seg)
+                    if match:
+                        link_text = match.group(1)
+                        link_url = match.group(2)
+                        add_hyperlink(p, link_url, link_text)
+                    else:
+                        p.add_run(seg)
+                elif seg.startswith("**") and seg.endswith("**"):
                     run = p.add_run(seg[2:-2])
                     run.bold = True
                 elif seg.startswith("*") and seg.endswith("*"):
-                    # Add italic run without markdown asterisks.
                     run = p.add_run(seg[1:-1])
                     run.italic = True
                 else:
