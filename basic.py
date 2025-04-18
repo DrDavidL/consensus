@@ -772,6 +772,7 @@ async def pubmed_abstracts(
                         response = create_chat_completion(messages, model="o3-mini")
                         # Expecting a JSON string; parse it into a dictionary.
                         response_content = response.choices[0].message.content.strip()
+                        logger.debug(f"Response content before parsing: {response_content}")
                         if not response_content:
                             logger.error("Empty response content received.")
                             relevance_scores = {}
