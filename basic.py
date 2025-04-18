@@ -56,7 +56,7 @@ from docx.oxml.ns import qn
 
 def add_hyperlink(paragraph, url, text, color="0000FF", underline=True):
     part = paragraph.part
-    r_id = part.relate_to(url, relationship_type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", is_external=True)
+    r_id = part.relate_to(url, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", True)
     hyperlink = OxmlElement('w:hyperlink')
     hyperlink.set(qn('r:id'), r_id)
     new_run = OxmlElement('w:r')
