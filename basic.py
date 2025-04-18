@@ -534,16 +534,23 @@ def markdown_to_word(markdown_text):
     doc = Document()
     lines = markdown_text.split("\n")
     for line in lines:
-        if line.startswith("# "):
-            doc.add_heading(line[2:], level=1)
-        elif line.startswith("## "):
-            doc.add_heading(line[3:], level=2)
-        elif line.startswith("### "):
-            doc.add_heading(line[4:], level=3)
-        elif line.startswith("- "):
-            doc.add_paragraph(line[2:], style="List Bullet")
+        # Handle headings by counting the leading '#' characters.
+        if line.startswith("#"):
+            heading_level = len(line) - len(line.lstrip('#'))
+            text = line[heading_level:].strip()
+            doc.add_heading(text, level=min(heading_level, 6))
         else:
-            doc.add_paragraph(line)
+            # Create a paragraph and process inline markdown (e.g., bold formatting)
+            p = doc.add_paragraph()
+            # Split the line into segments based on markdown bold '**'
+            segments = re.split(r'(\*\*.*?\*\*)', line)
+            for seg in segments:
+                if seg.startswith("**") and seg.endswith("**"):
+                    # Add bold run without markdown asterisks.
+                    run = p.add_run(seg[2:-2])
+                    run.bold = True
+                else:
+                    p.add_run(seg)
     return doc
 
 
