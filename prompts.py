@@ -720,7 +720,7 @@ You are assessing information for practicing clinicians; no disclaimers are need
 ### **3. Clinical Application & Decision-Making**  
 - Discuss **feasibility and patient-specific considerations** (e.g., comorbidities, socioeconomic factors, adherence challenges).  
 - Outline **ethical issues, risks, or implementation hurdles** in real-world settings.  
-- Provide **actionable recommendations**, including monitoring strategies or clinical workflows.  
+- Provide **actionable recommendations**, addressing any medically serious implications, monitoring strategies or clinical workflows.  
 - Anticipate 2–3 likely **follow-up questions** a clinician may ask and address them concisely.  
 
    **Example Format:**  
