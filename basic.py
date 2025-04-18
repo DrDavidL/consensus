@@ -542,13 +542,17 @@ def markdown_to_word(markdown_text):
         else:
             # Create a paragraph and process inline markdown (e.g., bold formatting)
             p = doc.add_paragraph()
-            # Split the line into segments based on markdown bold '**'
-            segments = re.split(r'(\*\*.*?\*\*)', line)
+            # Split the line into segments based on markdown bold '**' and italic '*' markers
+            segments = re.split(r'(\*\*.*?\*\*|\*.*?\*)', line)
             for seg in segments:
                 if seg.startswith("**") and seg.endswith("**"):
                     # Add bold run without markdown asterisks.
                     run = p.add_run(seg[2:-2])
                     run.bold = True
+                elif seg.startswith("*") and seg.endswith("*"):
+                    # Add italic run without markdown asterisks.
+                    run = p.add_run(seg[1:-1])
+                    run.italic = True
                 else:
                     p.add_run(seg)
     return doc
