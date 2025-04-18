@@ -555,6 +555,11 @@ def display_citations(citations):
 # Convert Markdown text to a Word document
 def markdown_to_word(markdown_text):
     doc = Document()
+    # Add the user question at the top of the document if available
+    if st.session_state.get("original_question"):
+        doc.add_heading("User Question", level=2)
+        doc.add_paragraph(st.session_state.original_question)
+        doc.add_paragraph("")  # Spacer paragraph
     lines = markdown_text.split("\n")
     for line in lines:
         # Handle headings by counting the leading '#' characters.
