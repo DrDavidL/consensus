@@ -691,6 +691,7 @@ async def pubmed_abstracts(
                     st.error("Unexpected response format from PubMed API")
                     return []
                 ids = data["esearchresult"].get("idlist", [])
+                logger.info(f"Total PubMed articles found: {len(ids)}")
                 if not ids:
                     st.write("No results found.")
                     return []
@@ -781,6 +782,7 @@ async def pubmed_abstracts(
                                 logger.error(f"Error parsing JSON response: {e}")
                                 logger.debug(f"Response content: {response_content}")
                                 relevance_scores = {}
+                        logger.info(f"Total relevant articles found: {len(relevance_scores)}")
                         # Filter articles based on the returned relevance scores.
                         relevant_articles = [
                             article
@@ -816,6 +818,7 @@ async def pubmed_abstracts(
                 ]
 
             # Ensure you return only up to max_results
+            logger.info(f"Total articles added to the database: {len(articles[:max_results])}")
             return articles[:max_results]
 
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
