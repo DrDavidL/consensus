@@ -732,6 +732,8 @@ async def pubmed_abstracts(
                                     "link": article_url,
                                 }
                             )
+                        else:
+                            logger.warning(f"No valid abstract found for article ID {id}")
 
             # If filtering by relevance is requested, build one prompt for all articles.
             if filter_relevance:
@@ -1376,6 +1378,11 @@ def main():
                                                 )
                                             app.add(link, data_type="web_page")
                                             success = True
+                                        except ValueError as ve:
+                                            logger.error(f"Value error: {ve}")
+                                            retries -= 1
+                                        except Exception as e:
+                                            logger.error(f"Unexpected error: {e}")
                                         except Exception as e:
                                             retries -= 1
                                             logger.error(
