@@ -695,7 +695,7 @@ async def pubmed_abstracts(
                     st.write("No results found.")
                     return []
             articles = []
-            semaphore = asyncio.Semaphore(6)
+            semaphore = asyncio.Semaphore(5)
             tasks = []
             for id in ids:
                 details_url = (
