@@ -44,6 +44,13 @@ NAME_PATTERN = re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?$')
 AUTHOR_ET_AL_PATTERN = re.compile(r'^[A-Z][a-z]+\s+et\s+al\.?$', re.IGNORECASE)
 NUMBERED_REF_PATTERN = re.compile(r'^\d+\.\s', re.MULTILINE)
 
+PUBMED_REGEX = re.compile(r'PubMed:', re.IGNORECASE)
+PMC_REGEX = re.compile(r'PMC', re.IGNORECASE)
+DOI_PATTERN = re.compile(r'\bdoi:\s*\S+', re.IGNORECASE)
+PMID_PATTERN = re.compile(r'\bPMID:\s*\d+')
+MONTH_PATTERN = re.compile(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b')
+LOWER_UPPER_PATTERN = re.compile(r'([a-z])([A-Z])')
+
 #########################################
 # Import Prompts for AI Guidance and Search
 #########################################
@@ -371,14 +378,14 @@ def is_non_informative(context: str) -> bool:
         return True
 
     # New Criterion: Check if combined PubMed and PMC mentions exceed 5.
-    pubmed_mentions = len(re.findall(r'PubMed:', context, flags=re.IGNORECASE))
-    pmc_mentions = len(re.findall(r'PMC', context, flags=re.IGNORECASE))
+    pubmed_mentions = len(PUBMED_REGEX.findall(context))
+    pmc_mentions = len(PMC_REGEX.findall(context))
     if (pubmed_mentions + pmc_mentions) > 5:
         return True
 
     # Criterion 3: Check for publication reference block characteristics
-    doi_matches = re.findall(r'\bdoi:\s*\S+', context, re.IGNORECASE)
-    pmid_matches = re.findall(r'\bPMID:\s*\d+', context)
+    doi_matches = DOI_PATTERN.findall(context)
+    pmid_matches = PMID_PATTERN.findall(context)
     
     # Density check for DOIs/PMIDs
     if (len(doi_matches) + len(pmid_matches)) > 3:
@@ -389,7 +396,7 @@ def is_non_informative(context: str) -> bool:
         return True
 
     # Check for month abbreviations in longer contexts with multiple "et al" mentions
-    if context.count("et al") > 1 or re.search(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b', context):
+    if context.count("et al") > 1 or MONTH_PATTERN.search(context):
         if len(context) > 150:
             return True
 
@@ -817,7 +824,7 @@ async def get_responses(queries):
 # Text Cleaning and Source Refinement Functions
 #########################################
 def clean_text(text):
-    text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
+    text = LOWER_UPPER_PATTERN.sub(r"\1 \2", text)
     text = text.replace("-", " ").replace(" .", ".")
     text = re.sub(r"\s{2,}", " ", text)
     return text
