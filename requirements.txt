@@ -128,7 +128,7 @@ nbclient==0.10.0
 nbconvert==7.16.4
 nbformat==5.10.4
 networkx==3.2.1
-nltk==3.8.1
+nltk==3.9
 numpy==1.26.4
 oauthlib==3.2.2
 onnxruntime==1.18.1
