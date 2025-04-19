@@ -8,10 +8,13 @@ import os
 import tempfile
 import time
 from datetime import datetime, timedelta
-
-from docx import Document
+from typing import List, Tuple, Dict
+import xml.etree.ElementTree as ET
 from io import BytesIO
 
+#########################################
+# Third-Party Library Imports
+#########################################
 import aiohttp
 import requests
 import streamlit as st
@@ -19,14 +22,18 @@ import anthropic
 from openai import OpenAI
 from exa_py import Exa
 import markdown2
-import xml.etree.ElementTree as ET
-from typing import List, Tuple, Dict
+from docx import Document
 from tavily import TavilyClient
 
+#########################################
+# EmbedChain Library Imports
+#########################################
 from embedchain import App
 from embedchain.config import BaseLlmConfig
 
-
+#########################################
+# Logging Configuration
+#########################################
 import logging
 
 #########################################
