@@ -25,6 +25,15 @@ import markdown2
 from docx import Document
 from tavily import TavilyClient
 
+from ragas import SingleTurnSample
+from ragas.metrics import AspectCritic
+from ragas.llms import LangchainLLMWrapper
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from langchain_openai import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
+evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4o"))
+evaluator_embeddings = LangchainEmbeddingsWrapper(OpenAIEmbeddings())
+
 #########################################
 # EmbedChain Library Imports
 #########################################
@@ -163,6 +172,8 @@ if "tavily_initial_response" not in st.session_state:
     st.session_state.tavily_initial_response = ""
 if "tavily_urls" not in st.session_state:
     st.session_state.tavily_urls = ""
+if "ragas_score" not in st.session_state:
+    st.session_state.ragas_score = 0.0
 
 #########################################
 # Sidebar Configuration: UI Elements & Settings
@@ -179,6 +190,28 @@ with st.sidebar:
         st.info("Use this option to get model guidance on a question.")
         st.write("Select the model guidance settings below.")
 
+# RAGAS Model Settings
+
+    #### Ragas Scoring
+    test_data ={
+        "user_input": f'{st.session_state.original_question} and sources: {st.session_state.citations}',
+        "response": st.session_state.full_initial_response,
+    }
+    metric = AspectCritic(name="summary_accuracy",llm=evaluator_llm, definition="Identify the Best Answer from Retrieved Context section. Assess if the sources support the response in this section.")
+    test_data = SingleTurnSample(**test_data)
+    # with st.spinner("Evaluating response..."):
+    #     pass_or_fail = metric.single_turn_ascore(test_data)
+    #     st.write(f'**RAGAS Score:** {pass_or_fail}')
+        
+    async def evaluate():
+        return await metric.single_turn_ascore(test_data)
+
+    if st.button("Run Ragas Evaluation"):
+        score = asyncio.run(evaluate())
+        # st.write("Summary Accuracy Score:", score)
+        st.session_state.ragas_score = score
+    if st.session_state.full_initial_response:
+        st.sidebar.write(f'**RAGAS Score to Assess if Section 1 is faithful to Sources:** {st.session_state.ragas_score}')
 
 
     st.divider()
