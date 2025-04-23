@@ -27,6 +27,7 @@ from tavily import TavilyClient
 
 from ragas import SingleTurnSample
 from ragas.metrics import AspectCritic
+from ragas.metrics import RubricsScore
 from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_openai import ChatOpenAI
@@ -197,6 +198,17 @@ with st.sidebar:
         "user_input": f'{st.session_state.original_question} and sources: {st.session_state.citations}',
         "response": st.session_state.full_initial_response,
     }
+    sample = SingleTurnSample(
+    response="The Earth is flat and does not orbit the Sun.",
+    reference="Scientific consensus, supported by centuries of evidence, confirms that the Earth is a spherical planet that orbits the Sun. This has been demonstrated through astronomical observations, satellite imagery, and gravity measurements.",
+)
+    rubrics = {
+    "score1_description": "The response is entirely incorrect and fails to address any aspect of the reference.",
+    "score2_description": "The response contains partial accuracy but includes major errors or significant omissions that affect its relevance to the reference.",
+    "score3_description": "The response is mostly accurate but lacks clarity, thoroughness, or minor details needed to fully address the reference.",
+    "score4_description": "The response is accurate and clear, with only minor omissions or slight inaccuracies in addressing the reference.",
+    "score5_description": "The response is completely accurate, clear, and thoroughly addresses the reference without any errors or omissions.",
+}
     metric = AspectCritic(name="summary_accuracy",llm=evaluator_llm, definition="Identify the Best Answer from Retrieved Context section. Assess if the sources support the response in this section.")
     test_data = SingleTurnSample(**test_data)
     # with st.spinner("Evaluating response..."):
