@@ -211,7 +211,7 @@ with st.sidebar:
         # st.write("Summary Accuracy Score:", score)
         st.session_state.ragas_score = score
     if st.session_state.full_initial_response:
-        st.sidebar.write(f'**RAGAS Score to Assess if Section 1 is faithful to Sources:** {st.session_state.ragas_score}')
+        st.sidebar.write(f'**Score (1 or 0) if Section 1 is faithful to Sources:** {st.session_state.ragas_score}')
 
 
     st.divider()
