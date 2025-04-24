@@ -40,6 +40,7 @@ import streamlit as st
 import anthropic
 from openai import OpenAI
 from exa_py import Exa
+from pydantic import PydanticDeprecatedSince211
 import markdown2
 from docx import Document
 from tavily import TavilyClient
