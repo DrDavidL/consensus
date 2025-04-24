@@ -212,38 +212,62 @@ with st.sidebar:
         st.write("Select the model guidance settings below.")
 
 # RAGAS Model Settings
+    if st.button("Check Section 1 for Hallucinations"):
+        #### Ragas Scoring
+        test_data ={
+            "user_input": f'{st.session_state.original_question} and sources: {st.session_state.citations}',
+            "response": st.session_state.full_initial_response,
+        }
+        pattern = r"^.*2\. Additional Insights from the Model's Knowledge.*$"
+        # Split at the first line MATCHING the plain text phrase (robust to markdown)
+        split_content = re.split(pattern, st.session_state.full_initial_response, maxsplit=1, flags=re.MULTILINE)
+        section1 = split_content[0].rstrip()
+        sample = SingleTurnSample(
+            response=f'User question: {st.session_state.original_question} Response: {section1}',
+            reference=str(st.session_state.citations),
+            )
 
-    #### Ragas Scoring
-    test_data ={
-        "user_input": f'{st.session_state.original_question} and sources: {st.session_state.citations}',
-        "response": st.session_state.full_initial_response,
-    }
-    sample = SingleTurnSample(
-    response="The Earth is flat and does not orbit the Sun.",
-    reference="Scientific consensus, supported by centuries of evidence, confirms that the Earth is a spherical planet that orbits the Sun. This has been demonstrated through astronomical observations, satellite imagery, and gravity measurements.",
-)
-    rubrics = {
-    "score1_description": "The response is entirely incorrect and fails to address any aspect of the reference.",
-    "score2_description": "The response contains partial accuracy but includes major errors or significant omissions that affect its relevance to the reference.",
-    "score3_description": "The response is mostly accurate but lacks clarity, thoroughness, or minor details needed to fully address the reference.",
-    "score4_description": "The response is accurate and clear, with only minor omissions or slight inaccuracies in addressing the reference.",
-    "score5_description": "The response is completely accurate, clear, and thoroughly addresses the reference without any errors or omissions.",
-}
-    metric = AspectCritic(name="summary_accuracy",llm=evaluator_llm, definition="Identify the Best Answer from Retrieved Context section. Assess if the sources support the response in this section.")
-    test_data = SingleTurnSample(**test_data)
-    # with st.spinner("Evaluating response..."):
-    #     pass_or_fail = metric.single_turn_ascore(test_data)
-    #     st.write(f'**RAGAS Score:** {pass_or_fail}')
-        
-    async def evaluate():
-        return await metric.single_turn_ascore(test_data)
+        hallucinations_binary = AspectCritic(
+            name="hallucinations_binary",
+            definition="Did the model hallucinate or add any information that was not present in the retrieved context?",
+            llm=evaluator_llm,
+        )
+        rubrics = {
+            "score1_description": "There is no hallucination in the response. All the information in the response is present in the retrieved context.",
+            "score2_description": "There are no factual statements that are not present in the retrieved context but the response is not fully accurate and lacks important details.",
+            "score3_description": "There are many factual statements that are not present in the retrieved context.",
+            "score4_description": "The response contains some factual errors and lacks important details.",
+            "score5_description": "The model adds new information and statements that contradict the retrieved context.",
+        }
+        scorer = RubricsScore(rubrics=rubrics, llm=evaluator_llm)
+        # await scorer.single_turn_ascore(sample)
+        # metric = AspectCritic(name="summary_accuracy",llm=evaluator_llm, definition="Identify the Best Answer from Retrieved Context section. Assess if the sources support the response in this section.")
+        # test_data = SingleTurnSample(**test_data)
+        # with st.spinner("Evaluating response..."):
+        #     pass_or_fail = metric.single_turn_ascore(test_data)
+        #     st.write(f'**RAGAS Score:** {pass_or_fail}')
+            
+        async def evaluate():
+            return await scorer.single_turn_ascore(sample)
 
-    if st.button("Run Ragas Evaluation"):
+
         score = asyncio.run(evaluate())
         # st.write("Summary Accuracy Score:", score)
-        st.session_state.ragas_score = score
-    if st.session_state.full_initial_response:
-        st.sidebar.write(f'**Score (1 or 0) if Section 1 is faithful to Sources:** {st.session_state.ragas_score}')
+        if score == 1:
+            st.success("There is no hallucination in Section 1 of the response. All the information in the response is present in the sources.")
+        elif score == 2:
+            st.error("Caution: There are no factual statements that are not present in the sources but the Section 1 response is not fully accurate and lacks important details.")
+        elif score == 3:
+            st.warning("Caution: There are many factual statements in Section 1 that are not present in the sources.")
+        elif score == 4:
+            st.warning("Warning: Section 1 of the response contains some factual errors and lacks important details.")
+        elif score == 5:
+            st.error("Warning!!! The model adds new information and statements to Section 1 that contradict the sources.")
+        else:
+            st.error("Error: Unable to evaluate the response.")
+    #     st.session_state.ragas_score = score
+    # if st.session_state.full_initial_response:
+    #     st.sidebar.write(f'**Score (1 or 0) if Section 1 is faithful to Sources:** {st.session_state.ragas_score}')
 
 
     st.divider()
