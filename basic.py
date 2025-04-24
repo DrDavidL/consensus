@@ -21,6 +21,7 @@ def skip_alembic_init():
 warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
 warnings.filterwarnings("ignore", category=DeprecationWarning, message="Testing an element's truth value")
 warnings.filterwarnings("ignore", message="Accessing the 'model_fields' attribute on the instance is deprecated")
+warnings.filterwarnings("ignore", message="Accessing the 'model_fields' attribute on the instance is deprecated. Instead, you should access this attribute from the model class. Deprecated in Pydantic V2.11 to be removed in V3.0.")
 # Remove the following line, as KeyError is not a Warning subclass and will cause an error
 # warnings.filterwarnings("ignore", category=KeyError, message="'script'")
 from datetime import datetime, timedelta
