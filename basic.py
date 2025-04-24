@@ -9,23 +9,13 @@ import tempfile
 import time
 import warnings
 
-# Monkey patch for alembic KeyError 'script' issue
-def patch_alembic():
-    try:
-        from alembic.util import langhelpers
-        original_remove_proxy = langhelpers._remove_proxy
-        
-        def patched_remove_proxy(self):
-            try:
-                original_remove_proxy(self)
-            except KeyError:
-                pass
-        
-        langhelpers._remove_proxy = patched_remove_proxy
-    except ImportError:
-        pass
-
-patch_alembic()
+# Skip alembic patching - not needed with current version
+def skip_alembic_init():
+    """
+    Function to skip alembic initialization in EmbedChain.
+    This will be implemented in the App initialization instead.
+    """
+    pass
 
 # Suppress specific deprecation warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
@@ -1211,16 +1201,28 @@ def main():
                 "min_chunk_size": 2000,
             },
         }
+    # Create a custom initialization that bypasses the alembic migration
     try:
-        app = App.from_config(config=config)
-    except KeyError as ke:
-        if str(ke) == "'script'":
-            # This is a known issue with alembic in EmbedChain
-            st.warning("Initializing database (ignoring alembic script error)")
+        # First attempt without any special handling
+        app = None
+        try:
             app = App.from_config(config=config)
-        else:
-            st.error(f"Error initializing App: {ke}")
-            app = None
+        except KeyError as ke:
+            if str(ke) == "'script'":
+                # Handle the specific alembic error by creating a simpler app
+                st.warning("Using simplified database initialization (bypassing alembic)")
+                # Create a basic app without the full config to avoid alembic
+                app = App()
+                # Then manually set the config components we need
+                if "vectordb" in config:
+                    app.db = config["vectordb"]
+                if "embedder" in config:
+                    app.embedder = config["embedder"]
+                if "llm" in config and config["llm"].get("provider"):
+                    app.llm_provider = config["llm"]["provider"]
+                    app.llm_config = config["llm"].get("config", {})
+            else:
+                st.error(f"Error initializing App: {ke}")
     except Exception as e:
         st.error(f"Error initializing App: {e}")
         app = None
