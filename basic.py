@@ -1211,7 +1211,6 @@ def main():
         except KeyError as ke:
             if str(ke) == "'script'":
                 # Handle the specific alembic error by creating a simpler app
-                st.warning("Using simplified database initialization (bypassing alembic)")
                 # Create a basic app without the full config to avoid alembic
                 app = App()
                 # Then manually set the config components we need
