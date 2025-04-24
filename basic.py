@@ -17,7 +17,9 @@ def skip_alembic_init():
     """
     pass
 
-# Suppress specific deprecation warnings
+# Suppress specific deprecation and syntax warnings
+warnings.filterwarnings("ignore", category=SyntaxWarning)
+warnings.filterwarnings("ignore", category=PydanticDeprecatedSince211)
 warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
 warnings.filterwarnings("ignore", category=DeprecationWarning, message="Testing an element's truth value")
 warnings.filterwarnings("ignore", message="Accessing the 'model_fields' attribute on the instance is deprecated")
