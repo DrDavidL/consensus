@@ -7,6 +7,12 @@ import re
 import os
 import tempfile
 import time
+import warnings
+
+# Suppress specific deprecation warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
+warnings.filterwarnings("ignore", category=DeprecationWarning, message="Testing an element's truth value")
+warnings.filterwarnings("ignore", message="Accessing the 'model_fields' attribute on the instance is deprecated")
 from datetime import datetime, timedelta
 from typing import List, Tuple, Dict
 import xml.etree.ElementTree as ET
@@ -652,7 +658,7 @@ async def extract_abstract_from_xml(xml_data: str, pmid: str) -> str:
         root = ET.fromstring(xml_data)
         for article in root.findall(".//PubmedArticle"):
             medline_citation = article.find("MedlineCitation")
-            if medline_citation:
+            if medline_citation is not None:
                 pmid_element = medline_citation.find("PMID")
                 if pmid_element is not None and pmid_element.text == pmid:
                     abstract_element = medline_citation.find(".//Abstract")
@@ -663,7 +669,7 @@ async def extract_abstract_from_xml(xml_data: str, pmid: str) -> str:
                             text = ET.tostring(
                                 elem, encoding="unicode", method="text"
                             ).strip()
-                            if label:
+                            if label is not None and label != "":
                                 abstract_texts.append(f"{label}: {text}")
                             else:
                                 abstract_texts.append(text)
