@@ -181,7 +181,9 @@ if "ragas_score" not in st.session_state:
 #########################################
 with st.sidebar:
     st.title("Main Settings")
-    short_use_case = st.radio("Use Case", ["Answer the Question", "Helpful PubMed Query", "Helpful Internet Sites"])
+    if "short_use_case" not in st.session_state:
+        st.session_state.short_use_case = "Answer the Question"
+    short_use_case = st.radio("Use Case", ["Answer the Question", "Helpful PubMed Query", "Helpful Internet Sites"], key="short_use_case")
 
     if short_use_case == "Helpful PubMed Query":
         st.info("Use this option to generate an advanced PubMed query.")
@@ -1184,7 +1186,11 @@ def main():
                 "min_chunk_size": 2000,
             },
         }
-    app = App.from_config(config=config)
+    try:
+        app = App.from_config(config=config)
+    except Exception as e:
+        st.error(f"Error initializing App: {e}")
+        app = None
     with st.expander("About this app"):
         st.info(
             """This app interprets a user query and retrieves content from selected internet domains (including PubMed if applicable) for an initial answer and then asks AI personas their opinions on the topic after providing them with updated content. Approaches shown to improve outputs like chain of thought, expert rephrasing, and chain of verification are applied to improve the quality of the responses and to reduce hallucination. Web sites are identified, processed and content selectively retrieved for answers using Real-Time Web Search and the EmbedChain library. The default main LLM model is o3-mini with medium reasoning from OpenAI. App author is David Liebovitz, MD"""
@@ -1272,11 +1278,12 @@ def main():
                     else:
                         if internet_search_provider == "Google":
                             domains = st.session_state.chosen_domain
-                    try:
-                        if len(app.get_data_sources()) > 0:
-                            app.reset()
-                    except:
-                        st.error("Error resetting app; just proceed")
+                    if app is not None:
+                        try:
+                            if len(app.get_data_sources()) > 0:
+                                app.reset()
+                        except Exception as e:
+                            st.error(f"Error resetting app: {e}; just proceed")
 
                     search_messages = [
                         {
@@ -1438,7 +1445,8 @@ def main():
                                                 raise ValueError(
                                                     "Article does not contain a 'link' key."
                                                 )
-                                            app.add(link, data_type="web_page")
+                                            if app is not None:
+                                                app.add(link, data_type="web_page")
                                             success = True
                                         except ValueError as ve:
                                             logger.error(f"Value error: {ve}")
@@ -1533,10 +1541,11 @@ def main():
                     blocked_sites = []
                     with st.spinner("Retrieving full content from web pages..."):
                         for site in st.session_state.urls:
-                            try:
-                                app.add(site, data_type="web_page")
-                            except Exception:
-                                blocked_sites.append(site)
+                            if app is not None:
+                                try:
+                                    app.add(site, data_type="web_page")
+                                except Exception:
+                                    blocked_sites.append(site)
                     # query_config = BaseLlmConfig(number_documents=15, model=rag_model)
                     with st.spinner("Analyzing retrieved content..."):
                         try:
@@ -1560,7 +1569,11 @@ def main():
                         except Exception as e:
                             st.error(f"Error during rag prep {e}")
                         try:
-                            citations = app.search(updated_rag_query,where=None,num_documents=20)
+                            if app is not None:
+                                citations = app.search(updated_rag_query, where=None, num_documents=20)
+                            else:
+                                citations = []
+                                st.warning("Search functionality is limited due to initialization error.")
                             # with st.expander("View full Citations"):
                             #     display_citations(citations)
                             #     st.write(f'Just the raw{citations}')
