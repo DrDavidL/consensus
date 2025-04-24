@@ -9,10 +9,29 @@ import tempfile
 import time
 import warnings
 
+# Monkey patch for alembic KeyError 'script' issue
+def patch_alembic():
+    try:
+        from alembic.util import langhelpers
+        original_remove_proxy = langhelpers._remove_proxy
+        
+        def patched_remove_proxy(self):
+            try:
+                original_remove_proxy(self)
+            except KeyError:
+                pass
+        
+        langhelpers._remove_proxy = patched_remove_proxy
+    except ImportError:
+        pass
+
+patch_alembic()
+
 # Suppress specific deprecation warnings
 warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
 warnings.filterwarnings("ignore", category=DeprecationWarning, message="Testing an element's truth value")
 warnings.filterwarnings("ignore", message="Accessing the 'model_fields' attribute on the instance is deprecated")
+warnings.filterwarnings("ignore", category=KeyError, message="'script'")
 from datetime import datetime, timedelta
 from typing import List, Tuple, Dict
 import xml.etree.ElementTree as ET
@@ -1194,6 +1213,14 @@ def main():
         }
     try:
         app = App.from_config(config=config)
+    except KeyError as ke:
+        if str(ke) == "'script'":
+            # This is a known issue with alembic in EmbedChain
+            st.warning("Initializing database (ignoring alembic script error)")
+            app = App.from_config(config=config)
+        else:
+            st.error(f"Error initializing App: {ke}")
+            app = None
     except Exception as e:
         st.error(f"Error initializing App: {e}")
         app = None
