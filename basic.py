@@ -21,7 +21,8 @@ def skip_alembic_init():
 warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
 warnings.filterwarnings("ignore", category=DeprecationWarning, message="Testing an element's truth value")
 warnings.filterwarnings("ignore", message="Accessing the 'model_fields' attribute on the instance is deprecated")
-warnings.filterwarnings("ignore", category=KeyError, message="'script'")
+# Remove the following line, as KeyError is not a Warning subclass and will cause an error
+# warnings.filterwarnings("ignore", category=KeyError, message="'script'")
 from datetime import datetime, timedelta
 from typing import List, Tuple, Dict
 import xml.etree.ElementTree as ET
