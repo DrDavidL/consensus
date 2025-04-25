@@ -44,6 +44,7 @@ from docx import Document
 from tavily import TavilyClient
 
 from ragas import SingleTurnSample
+from ragas.metrics import Faithfulness
 from ragas.metrics import AspectCritic
 from ragas.metrics import RubricsScore
 from ragas.llms import LangchainLLMWrapper
@@ -1812,6 +1813,12 @@ def main():
                         response=f'User question: {st.session_state.original_question} Response: {section1}',
                         reference=str(st.session_state.citations),
                         )
+                    
+                    sample_faithfulness = SingleTurnSample(
+                        user_input=st.session_state.original_question,
+                        response=st.session_state.full_initial_response,
+                        retrieved_contexts=[str(st.session_state.citations)],
+                    )
 
                     rubrics = {
                         "score1_description": "There is no hallucination in the response. The response is fully supported by the reference.",
@@ -1821,6 +1828,7 @@ def main():
                         "score5_description": "The model adds new information and statements that contradict the reference.",
                     }
                     scorer = RubricsScore(rubrics=rubrics, llm=evaluator_llm)
+                    scorer_faithfulness = Faithfulness(llm=evaluator_llm)
                     # await scorer.single_turn_ascore(sample)
                     # metric = AspectCritic(name="summary_accuracy",llm=evaluator_llm, definition="Identify the Best Answer from Retrieved Context section. Assess if the sources support the response in this section.")
                     # test_data = SingleTurnSample(**test_data)
@@ -1829,10 +1837,11 @@ def main():
                     #     st.write(f'**RAGAS Score:** {pass_or_fail}')
                         
                     async def evaluate():
-                        return await scorer.single_turn_ascore(sample)
+                        return await scorer.single_turn_ascore(sample), await scorer_faithfulness.single_turn_ascore(sample_faithfulness)
 
 
-                    score = asyncio.run(evaluate())
+
+                    score, score_faithfulness = asyncio.run(evaluate())
                     # st.write("Summary Accuracy Score:", score)
                     if score == 1:
                         st.success("Section 1 is fully supported by the sources.")
@@ -1846,6 +1855,7 @@ def main():
                         st.error("Warning!!! The model adds new information and statements to Section 1 that contradict the sources. Confirm with references directly.")
                     else:
                         st.error("Error: Unable to evaluate the response.")
+                    st.write(f'The faithfulness score is: {score_faithfulness}')
                 
                 #     st.session_state.ragas_score = score
                 # if st.session_state.full_initial_response:
