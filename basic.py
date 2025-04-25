@@ -1801,7 +1801,7 @@ def main():
             if st.session_state.rag_response or st.session_state.full_initial_response:
                 # RAGAS Model Settings
                 
-                hallucination_check=st.button("Validate Response against Sources")
+                hallucination_check=st.button("Validate Response Section 1 against Sources", help="The Faithfulness Score = Number of claims supported by the sources / Total number of claims in the response")
                 if hallucination_check:
                     #### Ragas Scoring
 
@@ -1816,7 +1816,7 @@ def main():
                     
                     sample_faithfulness = SingleTurnSample(
                         user_input=st.session_state.original_question,
-                        response=st.session_state.full_initial_response,
+                        response=section1,
                         retrieved_contexts=[str(st.session_state.citations)],
                     )
 
@@ -1844,7 +1844,7 @@ def main():
                     score, score_faithfulness = asyncio.run(evaluate())
                     # st.write("Summary Accuracy Score:", score)
                     if score == 1:
-                        st.success("Section 1 is fully supported by the sources.")
+                        st.success("Section 1 is supported by the sources.")
                     elif score == 2:
                         st.error("Caution: Factual statements are supported by the sources but the Section 1 response is not fully accurate and lacks important details. Confirm with references directly.")
                     elif score == 3:
@@ -1855,7 +1855,14 @@ def main():
                         st.error("Warning!!! The model adds new information and statements to Section 1 that contradict the sources. Confirm with references directly.")
                     else:
                         st.error("Error: Unable to evaluate the response.")
-                    st.write(f'The faithfulness score is: {score_faithfulness}')
+                    
+                    # st.info("The Faithfulness Score = Number of claims supported by the sources / Total number of claims in the response.")
+                        
+                    if score_faithfulness >0.9:
+                        st.success(f"**Faithfulness Score:** {score_faithfulness:.3f}")
+                    else:
+                        st.warning(f"**Faithfulness Score:** {score_faithfulness:.3f}. Review carefully given some unsupported assertions.")
+
                 
                 #     st.session_state.ragas_score = score
                 # if st.session_state.full_initial_response:

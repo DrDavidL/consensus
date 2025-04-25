@@ -1,43 +1,178 @@
+#########################################
+# Import Libraries and Setup
+#########################################
 import asyncio
 import json
 import re
+import os
 import tempfile
 import time
-from datetime import datetime, timedelta
+import warnings
 
-from docx import Document
+# Skip alembic patching - not needed with current version
+def skip_alembic_init():
+    """
+    Function to skip alembic initialization in EmbedChain.
+    This will be implemented in the App initialization instead.
+    """
+    pass
+
+# Suppress specific deprecation and syntax warnings
+warnings.filterwarnings("ignore", category=SyntaxWarning)
+warnings.filterwarnings("ignore", category=UserWarning, module="langchain")
+warnings.filterwarnings("ignore", category=DeprecationWarning, message="Testing an element's truth value")
+warnings.filterwarnings("ignore", message="Accessing the 'model_fields' attribute on the instance is deprecated")
+warnings.filterwarnings("ignore", message="Accessing the 'model_fields' attribute on the instance is deprecated. Instead, you should access this attribute from the model class. Deprecated in Pydantic V2.11 to be removed in V3.0.")
+# Remove the following line, as KeyError is not a Warning subclass and will cause an error
+# warnings.filterwarnings("ignore", category=KeyError, message="'script'")
+from datetime import datetime, timedelta
+from typing import List, Tuple, Dict
+import xml.etree.ElementTree as ET
 from io import BytesIO
 
+#########################################
+# Third-Party Library Imports
+#########################################
 import aiohttp
 import requests
 import streamlit as st
+import anthropic
 from openai import OpenAI
 from exa_py import Exa
 import markdown2
-import xml.etree.ElementTree as ET
-from typing import List, Tuple, Dict
+from docx import Document
 from tavily import TavilyClient
 
+from ragas import SingleTurnSample
+from ragas.metrics import Faithfulness
+from ragas.metrics import AspectCritic
+from ragas.metrics import RubricsScore
+from ragas.llms import LangchainLLMWrapper
+from ragas.embeddings import LangchainEmbeddingsWrapper
+from langchain_openai import ChatOpenAI
+from langchain_openai import OpenAIEmbeddings
 
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+
+
+#########################################
+# EmbedChain Library Imports
+#########################################
 from embedchain import App
 from embedchain.config import BaseLlmConfig
 
+#########################################
+# Logging Configuration
+#########################################
 import logging
 
+#########################################
+# Global Variables and Logging Configuration
+#########################################
 role_emojis = {
-    "user": "👤",  # Emoji for the user
-    "assistant": "🤖",  # Emoji for the assistant
+    "user": "👤",
+    "assistant": "🤖",
 }
 
-# __import__('pysqlite3')
-# import sys
-# sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-
-# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+NAME_PATTERN = re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)?$')
+AUTHOR_ET_AL_PATTERN = re.compile(r'^[A-Z][a-z]+\s+et\s+al\.?$', re.IGNORECASE)
+NUMBERED_REF_PATTERN = re.compile(r'^\d+\.\s', re.MULTILINE)
 
+PUBMED_REGEX = re.compile(r'PubMed:', re.IGNORECASE)
+PMC_REGEX = re.compile(r'PMC', re.IGNORECASE)
+DOI_PATTERN = re.compile(r'\bdoi:\s*\S+', re.IGNORECASE)
+PMID_PATTERN = re.compile(r'\bPMID:\s*\d+')
+MONTH_PATTERN = re.compile(r'\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\b')
+LOWER_UPPER_PATTERN = re.compile(r'([a-z])([A-Z])')
+NUMBERED_REF_PATTERN = re.compile(r'^\d+\.\s', re.MULTILINE)
+
+@st.cache_resource
+def get_evaluator_llm():
+    return LangchainLLMWrapper(ChatOpenAI(model="gpt-4o"))
+
+@st.cache_resource
+def get_evaluator_embeddings():
+    return LangchainEmbeddingsWrapper(OpenAIEmbeddings())
+
+# Cache scorers with attached LLM instance
+@st.cache_resource
+def get_scorers():
+    rubrics = {
+        "score1_description": "There is no hallucination in the response. The response is fully supported by the reference.",
+        "score2_description": "Factual statements are supported by the reference but the response is not fully accurate and lacks important details.",
+        "score3_description": "There are some factual statements that are not present in the reference.",
+        "score4_description": "The response contains some factual errors and lacks important details based on the reference.",
+        "score5_description": "The model adds new information and statements that contradict the reference.",
+    }
+    llm = get_evaluator_llm()
+    scorer = RubricsScore(rubrics=rubrics, llm=llm)
+    scorer_faithfulness = Faithfulness(llm=llm)
+    return scorer, scorer_faithfulness
+
+# Cache regex compilation
+@st.cache_data
+def get_pattern_insights():
+    return re.compile(r"^.*2\. Additional Insights from the Model's Knowledge.*$", re.MULTILINE)
+
+def extract_section1(full_initial_response):
+    pattern = get_pattern_insights()
+    split_content = pattern.split(full_initial_response, maxsplit=1)
+    return split_content[0].rstrip()
+
+def run_async(func, *args, **kwargs):
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(func(*args, **kwargs))
+    else:
+        coroutine = func(*args, **kwargs)
+        return loop.run_until_complete(coroutine)
+
+def compute_rubrics_score(original_question, full_initial_response, citations):
+    scorer, _ = get_scorers()
+    section1 = extract_section1(full_initial_response)
+    sample = SingleTurnSample(
+        response=f'User question: {original_question} Response: {section1}',
+        reference=str(citations),
+    )
+    return run_async(scorer.single_turn_ascore, sample)
+
+def compute_faithfulness_score(original_question, full_initial_response, citations):
+    _, scorer_faithfulness = get_scorers()
+    sample_faithfulness = SingleTurnSample(
+        user_input=original_question,
+        response=full_initial_response,
+        retrieved_contexts=[str(citations)],
+    )
+    return run_async(scorer_faithfulness.single_turn_ascore, sample_faithfulness)
+
+def add_hyperlink(paragraph, url, text, color="0000FF", underline=True):
+    part = paragraph.part
+    r_id = part.relate_to(url, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", True)
+    hyperlink = OxmlElement('w:hyperlink')
+    hyperlink.set(qn('r:id'), r_id)
+    new_run = OxmlElement('w:r')
+    rPr = OxmlElement('w:rPr')
+    if color is not None:
+        c = OxmlElement('w:color')
+        c.set(qn('w:val'), color)
+        rPr.append(c)
+    if underline:
+        u = OxmlElement('w:u')
+        u.set(qn('w:val'), 'single')
+        rPr.append(u)
+    new_run.append(rPr)
+    new_run.text = text
+    hyperlink.append(new_run)
+    paragraph._p.append(hyperlink)
+
+#########################################
+# Import Prompts for AI Guidance and Search
+#########################################
 from prompts import (
     system_prompt_expert_questions,
     expert1_system_prompt,
@@ -54,111 +189,117 @@ from prompts import (
     tavily_domains,
 )
 
+#########################################
+# Streamlit App Configuration and API Keys Setup
+#########################################
 st.set_page_config(
     page_title="Helpful AI",
     layout="wide",
     page_icon=":stethoscope:",
-    initial_sidebar_state="collapsed",
+    initial_sidebar_state="expanded",
 )
-# Set your API keys
 api_key = st.secrets["OPENAI_API_KEY"]
-api_key_anthropic = st.secrets["ANTHROPIC_API_KEY"]  # Anthropic API key
-exa = Exa(st.secrets["EXA_API_KEY"])  # Exa.ai API key
+api_key_anthropic = st.secrets["ANTHROPIC_API_KEY"]
+exa = Exa(st.secrets["EXA_API_KEY"])
 
+#########################################
+# Session State Initialization
+#########################################
 if "snippets" not in st.session_state:
     st.session_state["snippets"] = []
 if "urls" not in st.session_state:
     st.session_state["urls"] = []
-if "expert1_response" not in st.session_state:
-    st.session_state["expert1_response"] = ""
-if "expert2_response" not in st.session_state:
-    st.session_state["expert2_response"] = ""
-if "expert3_response" not in st.session_state:
-    st.session_state["expert3_response"] = ""
-if "sources" not in st.session_state:
-    st.session_state["sources"] = []
 if "rag_response" not in st.session_state:
     st.session_state["rag_response"] = ""
-
-if "citation_data" not in st.session_state:
-    st.session_state["citation_data"] = []
-
 if "source_chunks" not in st.session_state:
     st.session_state.source_chunks = ""
-
 if "experts" not in st.session_state:
     st.session_state.experts = []
-
 if "messages1" not in st.session_state:
     st.session_state.messages1 = []
-
 if "messages2" not in st.session_state:
     st.session_state.messages2 = []
-
 if "messages3" not in st.session_state:
     st.session_state.messages3 = []
-
 if "followup_messages" not in st.session_state:
     st.session_state.followup_messages = []
-
 if "final_thread" not in st.session_state:
     st.session_state.final_thread = []
-
 if "expert_number" not in st.session_state:
     st.session_state.expert_number = 0
-
 if "expert_answers" not in st.session_state:
     st.session_state.expert_answers = []
-
 if "original_question" not in st.session_state:
     st.session_state.original_question = ""
-
 if "chosen_domain" not in st.session_state:
     st.session_state.chosen_domain = ""
-
 if "articles" not in st.session_state:
     st.session_state.articles = []
-
 if "pubmed_search_terms" not in st.session_state:
     st.session_state.pubmed_search_terms = ""
-
 if "full_initial_response" not in st.session_state:
     st.session_state.full_initial_response = ""
-
 if "initial_response_thread" not in st.session_state:
     st.session_state.initial_response_thread = []
-
 if "citations" not in st.session_state:
     st.session_state.citations = []
-
 if "thread_with_tavily_context" not in st.session_state:
     st.session_state.thread_with_tavily_context = []
-
 if "tavily_followup_response" not in st.session_state:
     st.session_state.tavily_followup_response = ""
+if "tavily_initial_response" not in st.session_state:
+    st.session_state.tavily_initial_response = ""
+if "tavily_urls" not in st.session_state:
+    st.session_state.tavily_urls = ""
+if "ragas_score" not in st.session_state:
+    st.session_state.ragas_score = 0.0
 
+#########################################
+# Sidebar Configuration: UI Elements & Settings
+#########################################
 with st.sidebar:
-    topic_model_choice = st.toggle(
-        "Subject Area: Use GPT-4o",
-        help="Toggle to use GPT-4o model for determining if medical; otherwise, 4o-mini.",
-    )
-    if topic_model_choice:
-        st.write("GPT-4o model selected.")
-        topic_model = "gpt-4o"
-    else:
-        st.write("GPT-4o-mini model selected.")
-        topic_model = "gpt-4o-mini"
+    st.title("Main Settings")
+    if "short_use_case" not in st.session_state:
+        st.session_state.short_use_case = "Answer the Question"
+    short_use_case = st.radio("Use Case", ["Answer the Question", "Helpful PubMed Query", "Helpful Internet Sites"], key="short_use_case")
+
+    if short_use_case == "Helpful PubMed Query":
+        st.info("Use this option to generate an advanced PubMed query.")
+    elif short_use_case == "Helpful Internet Sites":
+        st.info("Use this option for a list of reliable webites to answer your question.")
+    elif short_use_case == "Model Guidance Only":
+        st.info("Use this option to get model guidance on a question.")
+        st.write("Select the model guidance settings below.")
+
+
+
 
     st.divider()
+    with st.sidebar.expander("Advanced Settings"):
+        st.info(
+            "Default settings are fine for most use cases!"
+        )
+        # Toggle for subject area model
+        topic_model_choice = st.toggle(
+            "Subject Area: Use GPT-4o",
+            help="Toggle to use GPT-4o model for determining if medical; otherwise, 4o-mini.",
+        )
+        if topic_model_choice:
+            st.write("GPT-4o model selected.")
+            topic_model = "gpt-4o"
+        else:
+            st.write("GPT-4o-mini model selected.")
+            topic_model = "gpt-4o-mini"
+        st.divider()
 
-    search_type = "all"
+        # Web search settings
+        search_type = "all"
 
-    with st.sidebar.popover("Web Search Settings"):
         site_number = st.number_input(
             "Number of web pages to retrieve:",
             min_value=1,
             max_value=20,
-            value=10,
+            value=6,
             step=1,
         )
         internet_search_provider = st.radio(
@@ -172,202 +313,392 @@ with st.sidebar:
             edited_medical_domains = st.text_area(
                 "Edit domains (maintain format pattern):", medical_domains, height=200
             )
+        st.divider()
 
-    st.divider()
-    st.sidebar.info("PubMed Search Settings")
-
-    years_back = st.slider(
-        "Years Back for PubMed Search",
-        min_value=1,
-        max_value=10,
-        value=4,
-        step=1,
-        help="Set the number of years back to search PubMed.",
-    )
-
-    st.divider()
-
-    max_results = st.slider(
-        "Number of Abstracts to Review",
-        min_value=3,
-        max_value=20,
-        value=10,
-        step=1,
-        help="Set the number of abstracts to review.",
-    )
-
-    st.divider()
-
-    filter_relevance = st.toggle(
-        "Filter Relevance of PubMed searching", value=True, help="Toggle to deselect."
-    )
-    if filter_relevance:
-        relevance_threshold = st.slider(
-            "Relevance Threshold",
-            min_value=0.3,
-            max_value=1.0,
-            value=0.8,
-            step=0.05,
-            help="Set the minimum relevance score to consider an item relevant.",
+        # PubMed search settings
+        years_back = st.slider(
+            "Years Back for PubMed Search",
+            min_value=1,
+            max_value=10,
+            value=4,
+            step=1,
+            help="Set the number of years back to search PubMed.",
         )
-    else:
-        relevance_threshold = 0.75
-        st.write("Top sources will be added to the database regardless.")
-    st.divider()
+        st.divider()
+        max_results = st.slider(
+            "Number of Abstracts to Review",
+            min_value=3,
+            max_value=20,
+            value=6,
+            step=1,
+            help="Set the number of abstracts to review.",
+        )
+        st.divider()
+        filter_relevance = st.toggle(
+            "Filter Relevance of PubMed searching", value=True, help="Toggle to deselect."
+        )
+        if filter_relevance:
+            relevance_threshold = st.slider(
+                "Relevance Threshold",
+                min_value=0.3,
+                max_value=1.0,
+                value=0.7,
+                step=0.05,
+                help="Set the minimum relevance score to consider an item relevant.",
+            )
+        else:
+            relevance_threshold = 0.65
+            st.write("Top sources will be added to the database regardless.")
+        st.divider()
 
-    st.sidebar.info("More Technical Settings")
+        # Technical settings for embedder model
+        st.divider()
+        embedder_model_choice = st.radio(
+            "Embedder Model Options",
+            ["text-embedding-3-small", "text-embedding-3-large", "gemini-embedding-exp-03-07"],
+            index=1,
+            help="Select the embedder model to use for the AI responses.",
+        )
+        if embedder_model_choice == "text-embedding-3-small":
+            st.write("text-embedding-3-small model selected.")
+            embedder_model = "text-embedding-3-small"
+            embedder_provider = "openai"
+            embedder_api_key = api_key
+        elif embedder_model_choice == "text-embedding-3-large":
+            st.write("text-embedding-3-large model selected.")
+            embedder_model = "text-embedding-3-large"
+            embedder_provider = "openai"
+            embedder_api_key = api_key
+        elif embedder_model_choice == "gemini-embedding-exp-03-07":
+            st.write("gemini-embedding-exp-03-07 model selected.")
+            embedder_model = "models/gemini-embedding-exp-03-07"
+            embedder_provider = "google"
+            os.environ["GOOGLE_API_KEY"] = st.secrets["GOOGLE_API_KEY"]
+        # st.divider()
+        # st.info(
+        #     "GPT-4o-mini performs well for other options. For more complex synthesis, stay with GPT-4o or use Claude-3.5 Sonnet."
+        # )
 
-    rag_question_model_choice = st.toggle(
-        "RAG Question Wording Model: Use GPT-4o",
-        help="Toggle to use GPT-4o model for RAG; otherwise, 4o-mini.",
-    )
-    if rag_question_model_choice:
-        st.write("GPT-4o model selected.")
-        rag_question_model = "gpt-4o"
-    else:
-        st.write("GPT-4o-mini model selected.")
-        rag_question_model = "gpt-4o-mini"
+        # RAG model options
+        rag_model_choice = "GPT-4o"
+        # rag_model_choice = st.radio(
+        #     "RAG Model Options",
+        #     ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet", "Gemini-2"],
+        #     index=1,
+        #     help="Select the RAG model to use for the AI responses.",
+        # )   
+        if rag_model_choice == "GPT-4o":
+            # st.write("GPT-4o model selected.")
+            rag_model = "gpt-4o"
+            rag_provider = "openai"
+            rag_key = api_key
+        elif rag_model_choice == "Gemini-2":
+            st.write("Gemini-2 flash model selected.")
+            rag_model = "gemini-2.0-flash"
+            rag_provider = "google"
+            rag_key = st.secrets["GOOGLE_API_KEY"]
+        elif rag_model_choice == "GPT-4o-mini":
+            st.write("GPT-4o-mini model selected.")
+            rag_model = "gpt-4o-mini"
+            rag_provider = "openai"
+            rag_key = api_key
+        elif rag_model_choice == "Claude-3.5 Sonnet":
+            st.write("Claude-3-5-sonnet-latest model selected.")
+            rag_model = "claude-3-5-sonnet-latest"
+            rag_provider = "anthropic"
+            rag_key = api_key_anthropic
+        st.divider()
 
-    st.divider()
+        # Second review model options
+        second_review_model = st.radio(
+            "Content Augmented Model Options",
+            ["GPT-4o-mini", "GPT-4o", "o3-mini", "Claude-3.7 Sonnet", "Gemini-2"],
+            index=2,
+            help="Select the RAG model to use for the AI responses.",
+        )
+        if second_review_model == "GPT-4o":
+            st.write("GPT-4o model selected.")
+            second_model = "gpt-4o"
+            second_provider = "openai"
+            second_key = api_key
+        elif second_review_model == "Claude-3.7 Sonnet":
+            st.write("Claude-3-7-sonnet model selected.")
+            second_model = "claude-3-7-sonnet-20250219"
+            second_provider = "anthropic"
+            second_key = api_key_anthropic
+        elif second_review_model == "GPT-4o-mini":
+            st.write("GPT-4o-mini model selected.")
+            second_model = "gpt-4o-mini"
+            second_provider = "openai"
+            second_key = api_key
+        elif second_review_model == "Gemini-2":
+            st.write("Gemini-2 flash model selected.")
+            second_model = "gemini-2.0-flash"
+            second_provider = "google"
+            second_key = st.secrets["GOOGLE_API_KEY"]
+        elif second_review_model == "o3-mini":
+            st.write("o3-mini reasoning model selected.")
+            second_model = "o3-mini"
+            second_provider = "openai"
+            second_key = api_key
+        st.divider()
 
-    embedder_model_choice = st.toggle(
-        "Embedder Model: Use text-embedding-3-large",
-        help="Toggle to use text-embedding-3-large.",
-    )
-    if embedder_model_choice:
-        st.write("text-embedding-3-large model selected.")
-        embedder_model = "text-embedding-3-large"
-    else:
-        st.write("text-embedding-3-small model selected.")
-        embedder_model = "text-embedding-3-small"
+        # Expert personas model choice
+        experts_model_choice = st.toggle(
+            "3 AI Experts Model: Use GPT-4o",
+            help="Toggle to use GPT-4o model for expert responses; otherwise, o3-mini with reasoning.",
+        )
+        if experts_model_choice:
+            st.write("GPT-4o model selected.")
+            experts_model = "gpt-4o"
+        else:
+            st.write("o3-mini reasoning model selected.")
+            experts_model = "o3-mini"
 
-    st.divider()
+        # Check if cutting-edge PubMed research should be included
+        cutting_edge = st.checkbox(
+            "Include Cutting-Edge Research in PubMed (default is consensus review articles)",
+            help="Check to include latest, not yet consensus, articles in the search for medical content.",
+            value=False,
+        )
+        if cutting_edge:
+            pubmed_prompt = cutting_edge_pubmed_prompt
+        else:
+            pubmed_prompt = optimize_pubmed_search_terms_system_prompt
 
-    st.info(
-        "GPT-4o-mini performs well for other options. For more complex synthesis, stay with GPT-4o or use Claude-3.5 Sonnet."
-    )
+        deeper_dive = st.checkbox(
+            "Deeper Dive",
+            help="Check to include PubMed explicitly with extensive searching.",
+            value=True,
+        )
 
-    rag_model_choice = st.radio(
-        "RAG Model Options",
-        [
-            "GPT-4o-mini",
-            "GPT-4o",
-            "Claude-3.5 Sonnet",
-        ],
-        index=1,
-        help="Select the RAG model to use for the AI responses.",
-    )
-    if rag_model_choice == "GPT-4o":
-        st.write("GPT-4o model selected.")
-        rag_model = "gpt-4o"
-        provider = "openai"
-        rag_key = api_key
-    elif rag_model_choice == "Claude-3.5 Sonnet":
-        st.write("Claude-3-5-sonnet-20240620 model selected.")
-        rag_model = "claude-3-5-sonnet-20240620"
-        provider = "anthropic"
-        rag_key = api_key_anthropic
-    elif rag_model_choice == "GPT-4o-mini":
-        st.write("GPT-4o-mini model selected.")
-        rag_model = "gpt-4o-mini"
-        provider = "openai"
-        rag_key = api_key
-
-    elif rag_model_choice == "o1-mini":
-        st.write("o1-mini model selected.")
-        rag_model = "o1-mini"
-        provider = "openai"
-        rag_key = api_key
-
-    elif rag_model_choice == "o1-preview":
-        st.write("o1-preview model selected.")
-        rag_model = "o1-preview"
-        provider = "openai"
-        rag_key = api_key
-
-    eval_model_choice = st.radio(
-        "Evaluation Model Options",
-        [
-            "GPT-4o-mini",
-            "GPT-4o",
-            "Claude-3.5 Sonnet",
-        ],
-        index=1,
-        help="Select the RAG model to use for the AI responses.",
-    )
-    if eval_model_choice == "GPT-4o":
-        st.write("GPT-4o model selected.")
-        rag_model = "gpt-4o"
-        provider = "openai"
-        rag_key = api_key
-    elif eval_model_choice == "Claude-3.5 Sonnet":
-        st.write("Claude-3-5-sonnet-20240620 model selected.")
-        rag_model = "claude-3-5-sonnet-20240620"
-        provider = "anthropic"
-        rag_key = api_key_anthropic
-    elif eval_model_choice == "GPT-4o-mini":
-        st.write("GPT-4o-mini model selected.")
-        rag_model = "gpt-4o-mini"
-        provider = "openai"
-        rag_key = api_key
-
-    elif eval_model_choice == "o1-mini":
-        st.write("o1-mini model selected.")
-        rag_model = "o1-mini"
-        provider = "openai"
-        rag_key = api_key
-
-    elif eval_model_choice == "o1-preview":
-        st.write("o1-preview model selected.")
-        rag_model = "o1-preview"
-        provider = "openai"
-        rag_key = api_key
-
-    st.divider()
-    experts_model_choice = st.toggle(
-        "3 AI Experts Model: Use GPT-4o-mini",
-        help="Toggle to use GPT-4o model for expert responses; otherwise, 4o-mini.",
-    )
-    if experts_model_choice:
-        st.write("GPT-4o-mini model selected.")
-        experts_model = "gpt-4o-mini"
-    else:
-        st.write("GPT-4o model selected.")
-        experts_model = "gpt-4o"
-
-
-# Function to replace the first user message
-def replace_first_user_message(messages, new_message):
-    for i, message in enumerate(messages):
-        if message["role"] == "user":
-            messages[i] = new_message
-            break
+#########################################
+# Utility Functions
+#########################################
 
 
+def is_non_informative(context: str) -> bool:
+    """
+    Returns True if the citation context is deemed non-informative.
+    The following criteria are used:
+      1. The context is empty or very short.
+      2. The context appears to be a simple author name or follows a basic name pattern.
+      3. The context appears to be a publication reference block 
+         (e.g., includes markers like "PMID:" or "doi:" multiple times, numbered references,
+          or repeated mentions of "PubMed:"/ "PMC").
+      4. The context appears to be a disclosure or print prompt block.
+    """
+    context = context.strip()
+    
+    # Criterion 1: Empty or very short context
+    if not context or len(context) < 5:
+        return True
+
+    # Criterion 2: Simple name patterns
+    if NAME_PATTERN.fullmatch(context):
+        return True
+
+    if AUTHOR_ET_AL_PATTERN.fullmatch(context):
+        return True
+
+    # New Criterion: Check if combined PubMed and PMC mentions exceed 5.
+    pubmed_mentions = len(PUBMED_REGEX.findall(context))
+    pmc_mentions = len(PMC_REGEX.findall(context))
+    if (pubmed_mentions + pmc_mentions) > 5:
+        return True
+
+    # Criterion 3: Check for publication reference block characteristics
+    doi_matches = DOI_PATTERN.findall(context)
+    pmid_matches = PMID_PATTERN.findall(context)
+    
+    # Density check for DOIs/PMIDs
+    if (len(doi_matches) + len(pmid_matches)) > 3:
+        return True
+
+    # Check for reference numbering pattern (e.g., "47." or "1.")
+    if len(NUMBERED_REF_PATTERN.findall(context)) > 3:
+        return True
+
+    # Check for month abbreviations in longer contexts with multiple "et al" mentions
+    if context.count("et al") > 1 or MONTH_PATTERN.search(context):
+        if len(context) > 150:
+            return True
+
+    # Criterion 4: Disclosure or print prompt blocks
+    if context.count("Disclosure:") > 1:
+        return True
+
+    if "Print this section" in context or "What would you like to print?" in context:
+        return True
+
+    # Additional check: High line-break density typical in reference blocks
+    if context.count('\n') > 5:
+        return True
+
+    # Additional check: Overly long contexts with common website cues
+    if len(context) > 500 and ("Medscape" in context or "Copyright" in context):
+        return True
+
+    return False
+
+def filter_citations(citations: list) -> list:
+    """
+    Given a list of citation dictionaries, filter out those entries where the 'context'
+    is deemed non-informative. URLs are retained as part of the final dictionary.
+    """
+    return [
+        {
+            "context": citation.get("context", ""),
+            "url": citation.get("metadata", {}).get("url", ""),
+            "score": citation.get("metadata", {}).get("score", 0),
+        }
+        for citation in citations
+        if not is_non_informative(citation.get("context", ""))
+    ]
+
+def extract_and_format_urls(tavily_output):
+    """
+    Extracts all URLs from the Tavily output and returns a formatted string
+    with a numbered list. Each URL is printed as the link text.
+    """
+    results = tavily_output.get("results", [])
+    if not results:
+        return "No URLs found."
+
+    # Extract URLs from each result (ignoring any missing or empty values)
+    urls = [result.get("url", "") for result in results if result.get("url", "")]
+    # Optionally remove duplicates (if necessary)
+    unique_urls = sorted(set(urls))
+
+    # Create a nicely formatted string with a numbered list of URLs.
+    output_lines = ["List of References:"]
+    for idx, url in enumerate(unique_urls, start=1):
+        output_lines.append(f"{idx}. {url}")
+
+    return "\n".join(output_lines)
+
+
+def display_url_list(citations):
+    """
+    Extract and display a deduplicated list of URLs from the given citations.
+
+    Each citation is expected to be a dictionary with at least a 'url' key.
+    The function creates a clickable Markdown list where the URL itself is used as the link text.
+    """
+    # Extract URLs from each citation if present.
+    urls = {citation.get("url", "") for citation in citations if citation.get("url", "")}
+
+    # Remove duplicate URLs and sort for consistency.
+    unique_urls = sorted(urls)
+
+    # Display header.
+    st.markdown("**List of Source URLs**", unsafe_allow_html=True)
+
+    # Loop through the deduplicated URLs and display them as clickable markdown links.
+    for url in unique_urls:
+        # The markdown syntax [url](url) displays the URL as both link text and destination.
+        st.markdown(f"- [{url}]({url})", unsafe_allow_html=True)
+
+
+def display_citations(citations):
+    """
+    Display citations nicely in a Streamlit app.
+
+    Each citation in the citations list is a dictionary with keys:
+        - context (str): The citation text snippet.
+        - url (str): The URL of the source.
+        - score (float): A relevance score (0 to 1).
+
+    The function sorts the citations by descending score and displays each with:
+        - A numbered header including a normalized relevance percentage.
+        - A clickable link to the source.
+        - The context text.
+        - A horizontal rule divider.
+    """
+    # Display a main header for the sources section
+    st.markdown("## Sources", unsafe_allow_html=True)
+
+    # Sort the citations by score (highest relevance first)
+    sorted_citations = sorted(citations, key=lambda c: c.get("score", 0), reverse=False)
+
+    # Loop over each citation and display the formatted content
+    for i, citation in enumerate(sorted_citations, start=1):
+        # Get raw distance from ChromaDB
+        distance = citation.get("score", 0)
+
+        # Convert ChromaDB's cosine distance to a normalized similarity score (0-1)
+        similarity_score = 1 - (distance / 2)  # Ensures range 0 (worst) to 1 (best)
+        
+        # Ensure score is within valid bounds (0-1) before converting to percentage
+        normalized_score = round(max(0, min(similarity_score, 1)) * 100, 2)
+
+        # Create a header with the source number and relevance percentage
+        st.markdown(
+            f"### Source {i} (Relevance: {normalized_score}%)", unsafe_allow_html=True
+        )
+
+        # If a URL is present, create a clickable link
+        url = citation.get("url", "")
+        if url:
+            st.markdown(f"[Link to Source]({url})", unsafe_allow_html=True)
+
+        # Display the citation context text
+        context_text = citation.get("context", "")
+        st.markdown(context_text, unsafe_allow_html=True)
+
+        # Add a horizontal rule to separate sources
+        st.markdown("---", unsafe_allow_html=True)
+
+
+
+# Convert Markdown text to a Word document
 def markdown_to_word(markdown_text):
-    """Convert markdown text to a Word document."""
     doc = Document()
+    # Add the user question at the top of the document if available
+    if st.session_state.get("original_question"):
+        doc.add_heading("User Question", level=2)
+        doc.add_paragraph(st.session_state.original_question)
+        doc.add_paragraph("")  # Spacer paragraph
     lines = markdown_text.split("\n")
     for line in lines:
-        if line.startswith("# "):  # H1
-            doc.add_heading(line[2:], level=1)
-        elif line.startswith("## "):  # H2
-            doc.add_heading(line[3:], level=2)
-        elif line.startswith("### "):  # H3
-            doc.add_heading(line[4:], level=3)
-        elif line.startswith("- "):  # Bullet points
-            doc.add_paragraph(line[2:], style="List Bullet")
-        else:  # Normal text
-            doc.add_paragraph(line)
+        # Handle headings by counting the leading '#' characters.
+        if line.startswith("#"):
+            heading_level = len(line) - len(line.lstrip('#'))
+            text = line[heading_level:].strip()
+            doc.add_heading(text, level=min(heading_level, 6))
+        else:
+            # Create a paragraph and process inline markdown (e.g., bold formatting)
+            p = doc.add_paragraph()
+            # Split the line into segments based on hyperlinks, bold '**' and italic '*' markers
+            segments = re.split(r'(\[.*?\]\(.*?\)|\*\*.*?\*\*|\*.*?\*)', line)
+            for seg in segments:
+                if seg.startswith("[") and seg.endswith(")"):
+                    # Process Markdown hyperlink [text](url)
+                    match = re.match(r'\[([^]]+)\]\(([^)]+)\)', seg)
+                    if match:
+                        link_text = match.group(1)
+                        link_url = match.group(2)
+                        add_hyperlink(p, link_url, link_text)
+                    else:
+                        p.add_run(seg)
+                elif seg.startswith("**") and seg.endswith("**"):
+                    run = p.add_run(seg[2:-2])
+                    run.bold = True
+                elif seg.startswith("*") and seg.endswith("*"):
+                    run = p.add_run(seg[1:-1])
+                    run.italic = True
+                else:
+                    p.add_run(seg)
     return doc
 
 
+# Extract abstract text from PubMed XML data for a given PMID
 async def extract_abstract_from_xml(xml_data: str, pmid: str) -> str:
     try:
         root = ET.fromstring(xml_data)
         for article in root.findall(".//PubmedArticle"):
             medline_citation = article.find("MedlineCitation")
-            if medline_citation:
+            if medline_citation is not None:
                 pmid_element = medline_citation.find("PMID")
                 if pmid_element is not None and pmid_element.text == pmid:
                     abstract_element = medline_citation.find(".//Abstract")
@@ -378,7 +709,7 @@ async def extract_abstract_from_xml(xml_data: str, pmid: str) -> str:
                             text = ET.tostring(
                                 elem, encoding="unicode", method="text"
                             ).strip()
-                            if label:
+                            if label is not None and label != "":
                                 abstract_texts.append(f"{label}: {text}")
                             else:
                                 abstract_texts.append(text)
@@ -389,6 +720,7 @@ async def extract_abstract_from_xml(xml_data: str, pmid: str) -> str:
         return "Error extracting abstract"
 
 
+# Fetch additional PubMed result IDs if needed
 async def fetch_additional_results(
     session: aiohttp.ClientSession,
     search_query: str,
@@ -396,8 +728,11 @@ async def fetch_additional_results(
     current_count: int,
 ) -> List[str]:
     additional_needed = max_results - current_count
-    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={additional_needed}&api_key={st.secrets['pubmed_api_key']}"
-
+    url = (
+        f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?"
+        f"db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={additional_needed}&"
+        f"api_key={st.secrets['pubmed_api_key']}"
+    )
     try:
         async with session.get(url) as response:
             response.raise_for_status()
@@ -408,6 +743,7 @@ async def fetch_additional_results(
         return []
 
 
+# Fetch PubMed article details and abstract XML data
 async def fetch_article_details(
     session: aiohttp.ClientSession,
     id: str,
@@ -420,62 +756,16 @@ async def fetch_article_details(
             async with session.get(details_url) as details_response:
                 details_response.raise_for_status()
                 details_data = await details_response.json()
-
             async with session.get(abstracts_url) as abstracts_response:
                 abstracts_response.raise_for_status()
                 abstracts_data = await abstracts_response.text()
-
             return id, details_data, abstracts_data
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
             print(f"Error fetching article details for ID {id}: {e}")
             return id, {}, ""
 
 
-def filter_items_with_chat_completion(
-    items,
-    search_terms=st.session_state.original_question,
-    threshold=relevance_threshold,
-    item_type="abstract",
-):
-    """
-    Filters a list of items (articles or URLs) based on relevance using the chat completion function.
-
-    Parameters:
-        items (list): List of items to filter.
-        search_terms (str): The original search query.
-        threshold (float): Minimum relevance score to consider an item relevant.
-        item_type (str): Type of item ("abstract" or "url").
-
-    Returns:
-        list: Filtered list of relevant items.
-    """
-    filtered_items = []
-    for item in items:
-        content = item["abstract"] if item_type == "abstract" else item["url"]
-        messages = [
-            {
-                "role": "system",
-                "content": "You are an assistant evaluating relevance of items to a query.",
-            },
-            {
-                "role": "user",
-                "content": f"Query: {search_terms}\nItem Content: {content}\nCarefully examine the title and abstract to respond with a relevance score between 0 and 1 reflecting the likelihood the query is effectively answered by the source.",
-            },
-        ]
-        try:
-            response = create_chat_completion(
-                messages, model="gpt-4o-mini", temperature=0.3
-            )
-            relevance_score = float(response.choices[0].message.content.strip())
-            if relevance_score >= threshold:
-                filtered_items.append(item)
-        except Exception as e:
-            logger.error(f"Error filtering item: {e}")
-            continue
-
-    return filtered_items
-
-
+# Retrieve and filter PubMed abstracts based on search terms and relevance
 async def pubmed_abstracts(
     search_terms: str,
     search_type: str = "all",
@@ -483,63 +773,49 @@ async def pubmed_abstracts(
     years_back: int = years_back,
     filter_relevance: bool = filter_relevance,
     relevance_threshold: float = relevance_threshold,
-) -> Tuple[List[Dict[str, str]], List[Dict[str, str]]]:
-    """
-    Fetch PubMed abstracts and associated URLs, with optional relevance filtering.
-
-    Parameters:
-        search_terms (str): PubMed search query.
-        search_type (str): Type of search (default "all").
-        max_results (int): Maximum number of results to fetch.
-        years_back (int): Number of years back to include in the search.
-        filter_relevance (bool): Whether to filter results by relevance.
-        relevance_threshold (float): Minimum relevance score for filtering.
-
-    Returns:
-        Tuple[List[Dict[str, str]], List[Dict[str, str]]]: Filtered articles and URLs.
-    """
+) -> List[Dict[str, str]]:
     current_year = datetime.now().year
     start_year = current_year - years_back
     search_query = f"{search_terms}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
-
-    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
-
-    # url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=pub+date&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
-
+    url = (
+        f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?"
+        f"db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={max_results}&"
+        f"api_key={st.secrets['pubmed_api_key']}"
+    )
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get(url) as response:
                 response.raise_for_status()
                 data = await response.json()
-
                 if "esearchresult" not in data or "count" not in data["esearchresult"]:
                     st.error("Unexpected response format from PubMed API")
-                    return [], []
-
+                    return []
                 ids = data["esearchresult"].get("idlist", [])
+                logger.info(f"Total PubMed articles found: {len(ids)}")
                 if not ids:
                     st.write("No results found.")
-                    return [], []
-
-            # Fetch details and abstracts
+                    return []
             articles = []
-            urls = []
-            semaphore = asyncio.Semaphore(5)
+            semaphore = asyncio.Semaphore(10)
             tasks = []
-
             for id in ids:
-                details_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={id}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
-                abstracts_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={id}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
+                details_url = (
+                    f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?"
+                    f"db=pubmed&id={id}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
+                )
+                abstracts_url = (
+                    f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?"
+                    f"db=pubmed&id={id}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
+                )
                 tasks.append(
                     fetch_article_details(
                         session, id, details_url, abstracts_url, semaphore
                     )
                 )
-
             results = await asyncio.gather(*tasks)
 
+            # First, build your filtered articles list as before.
             filtered_articles = []
-
             for id, details_data, abstracts_data in results:
                 if "result" in details_data and str(id) in details_data["result"]:
                     article = details_data["result"][str(id)]
@@ -548,51 +824,79 @@ async def pubmed_abstracts(
                         abstract = await extract_abstract_from_xml(abstracts_data, id)
                         article_url = f"https://pubmed.ncbi.nlm.nih.gov/{id}"
                         if abstract.strip() and abstract != "No abstract available":
-                            # Append all articles and URLs for potential filtering
                             filtered_articles.append(
                                 {
                                     "id": id,
                                     "title": article["title"],
                                     "year": year,
                                     "abstract": abstract.strip(),
-                                    "link": article_url,  # Link URL to the abstract
+                                    "link": article_url,
                                 }
                             )
-            print(f"Filtered articles: {filtered_articles}")
-            # Filter articles for relevance if specified
-            if filter_relevance:
-                print(
-                    f"Filtering articles with relevance threshold {relevance_threshold}"
-                )
-                relevant_articles = []
-                for article in filtered_articles:
-                    messages = [
-                        {
-                            "role": "system",
-                            "content": "You are an assistant evaluating relevance of abstracts to a query. You only return a score between 0 and 1.",
-                        },
-                        {
-                            "role": "user",
-                            "content": f"Query: {st.session_state.original_question}\nAbstract: {article['abstract']}\nNow, respond only with a relevance score between 0 and 1 representing the likelihood the answer is found in this article. Review articles for the subject should have high weighting. Sample response: 0.9",
-                        },
-                    ]
+                        else:
+                            logger.warning(f"No valid abstract found for article ID {id}")
 
-                    with st.spinner("Filtering PubMed articles for question relevance"):
-                        try:
-                            response = create_chat_completion(
-                                messages, model="gpt-4o-mini", temperature=0.3
-                            )
-                            relevance_score = float(
-                                response.choices[0].message.content.strip()
-                            )
-                            if relevance_score >= relevance_threshold:
-                                relevant_articles.append(article)
-                        except Exception as e:
-                            logger.error(f"Error filtering article: {e}")
-                            continue
-                print(f"Number of relevant articles: {len(relevant_articles)}")
-                print(f"Number of original articles: {len(filtered_articles)}")
-                # Separate filtered articles and URLs
+            # If filtering by relevance is requested, build one prompt for all articles.
+            if filter_relevance:
+                # Create a string that lists each article's ID and title.
+                articles_prompt = "\n".join(
+                    [
+                        f"ID: {article['id']} - Title: {article['title']}"
+                        for article in filtered_articles
+                    ]
+                )
+
+                messages = [
+                    {
+                        "role": "system",
+                        "content": (
+                            "You are an assistant evaluating the relevance of articles to a query. "
+                            "For each article provided, return a relevance score between 0.0 and 1.0 as a JSON object mapping "
+                            "the article's ID to its score, For example return only: {'12345': 0.9, '67890': 0.7}"
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": (
+                            f"Query: {st.session_state.original_question}\n"
+                            f"Articles:\n{articles_prompt}\n\n"
+                            "Return a JSON object without additional charactoers."  
+                        ),
+                    },
+                ]
+
+                with st.spinner("Filtering PubMed articles for question relevance"):
+                    try:
+                        response = create_chat_completion(messages, model="o3-mini")
+                        # Expecting a JSON string; parse it into a dictionary.
+                        response_content = response.choices[0].message.content.strip()
+                        # st.write(f"Response content: {response_content}")
+                        logger.debug(f"Response content before parsing: {response_content}")
+                        if not response_content:
+                            logger.error("Empty response content received.")
+                            relevance_scores = {}
+                        else:
+                            try:
+                                relevance_scores = json.loads(response_content)
+                                # st.write(f"Relevance scores: {relevance_scores}")
+                            except json.JSONDecodeError as e:
+                                logger.error(f"Error parsing JSON response: {e}")
+                                logger.debug(f"Response content: {response_content}")
+                                relevance_scores = {}
+                        logger.info(f"Total relevant articles found: {len(relevance_scores)}")
+                        # Filter articles based on the returned relevance scores.
+                        relevant_articles = [
+                            article
+                            for article in filtered_articles
+                            if float(relevance_scores.get(str(article["id"]), 0))
+                            >= relevance_threshold
+                        ]
+                        # st.write(f"Total relevant articles found: {len(relevant_articles)}")
+                    except Exception as e:
+                        logger.error(f"Error filtering articles: {e}")
+                        # In case of an error, fallback to using all filtered articles.
+                        relevant_articles = filtered_articles
+
                 articles = [
                     {
                         "id": a["id"],
@@ -603,9 +907,7 @@ async def pubmed_abstracts(
                     }
                     for a in relevant_articles
                 ]
-                # urls = [{'id': a['id'], 'link': a['link']} for a in relevant_articles]
             else:
-                # If no filtering, include all
                 articles = [
                     {
                         "id": a["id"],
@@ -616,241 +918,27 @@ async def pubmed_abstracts(
                     }
                     for a in filtered_articles
                 ]
-                # urls = [{'id': a['id'], 'link': a['link']} for a in filtered_articles]
 
-        except aiohttp.ClientError as e:
-            st.error(f"Error connecting to PubMed API: {e}")
-            return [], []
-        except Exception as e:
-            st.error(f"An unexpected error occurred: {e}")
-            return [], []
+            # Ensure you return only up to max_results
+            logger.info(f"Total articles added to the database: {len(articles[:max_results])}")
+            return articles[:max_results]
 
-    return articles[:max_results]
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            print(f"Error fetching PubMed articles: {e}")
+            return []
 
 
-async def pubmed_abstracts_azure(
-    search_terms: str,
-    search_type: str = "all",
-    max_results: int = 5,
-    years_back: int = 3,
-) -> Tuple[List[Dict[str, str]], List[str]]:
-    current_year = datetime.now().year
-    start_year = current_year - years_back
-    search_query = f"{search_terms}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
-
-    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
-
-    async with aiohttp.ClientSession() as session:
-        try:
-            async with session.get(url) as response:
-                response.raise_for_status()
-                data = await response.json()
-
-                if "esearchresult" not in data or "count" not in data["esearchresult"]:
-                    st.error("Unexpected response format from PubMed API")
-                    return [], []
-
-                if int(data["esearchresult"]["count"]) == 0:
-                    st.write(
-                        "No PubMed results found within the time period. Expand time range in settings or try a different question."
-                    )
-                    return [], []
-
-            ids = data["esearchresult"].get("idlist", [])
-            if not ids:
-                st.write("No results found.")
-                return [], []
-
-            articles = []
-            unique_urls = set()
-            semaphore = asyncio.Semaphore(5)  # Limit to 5 concurrent requests
-            tasks = []
-
-            for id in ids:
-                details_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={id}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
-                abstracts_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={id}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
-                tasks.append(
-                    fetch_article_details(
-                        session, id, details_url, abstracts_url, semaphore
-                    )
-                )
-
-            results = await asyncio.gather(*tasks)
-
-            for id, details_data, abstracts_data in results:
-                if "result" in details_data and str(id) in details_data["result"]:
-                    article = details_data["result"][str(id)]
-                    year = article["pubdate"].split(" ")[0]
-                    if year.isdigit():
-                        abstract = await extract_abstract_from_xml(abstracts_data, id)
-                        article_url = f"https://pubmed.ncbi.nlm.nih.gov/{id}"
-                        if abstract.strip() and abstract != "No abstract available":
-                            articles.append(
-                                {
-                                    "title": article["title"],
-                                    "year": year,
-                                    "link": article_url,
-                                    "abstract": abstract.strip(),
-                                }
-                            )
-                            unique_urls.add(article_url)
-                else:
-                    print(f"Details not available for ID {id}")
-
-            # If we don't have enough results with abstracts, fetch more
-            while len(articles) < max_results:
-                additional_ids = await fetch_additional_results(
-                    session, search_query, max_results, len(articles)
-                )
-                if not additional_ids:
-                    break  # No more results available
-
-                additional_tasks = []
-                for id in additional_ids:
-                    details_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={id}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
-                    abstracts_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={id}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
-                    additional_tasks.append(
-                        fetch_article_details(
-                            session, id, details_url, abstracts_url, semaphore
-                        )
-                    )
-
-                additional_results = await asyncio.gather(*additional_tasks)
-
-                for id, details_data, abstracts_data in additional_results:
-                    if "result" in details_data and str(id) in details_data["result"]:
-                        article = details_data["result"][str(id)]
-                        year = article["pubdate"].split(" ")[0]
-                        if year.isdigit():
-                            abstract = await extract_abstract_from_xml(
-                                abstracts_data, id
-                            )
-                            article_url = f"https://pubmed.ncbi.nlm.nih.gov/{id}"
-                            if abstract.strip() and abstract != "No abstract available":
-                                articles.append(
-                                    {
-                                        "title": article["title"],
-                                        "year": year,
-                                        "link": article_url,
-                                        "abstract": abstract.strip(),
-                                    }
-                                )
-                                unique_urls.add(article_url)
-                                if len(articles) >= max_results:
-                                    break
-
-        except aiohttp.ClientError as e:
-            st.error(f"Error connecting to PubMed API: {e}")
-            return [], []
-        except Exception as e:
-            st.error(f"An unexpected error occurred: {e}")
-            return [], []
-
-    return articles[:max_results], list(unique_urls)
-
-
-def pubmed_abstracts_old(search_terms, search_type="all", max_results=5, years_back=3):
-    # search_terms_encoded = requests.utils.quote(search_terms)
-
-    # if search_type == "all":
-    #     publication_type_filter = ""
-    # elif search_type == "clinical trials":
-    #     publication_type_filter = "+AND+Clinical+Trial[Publication+Type]"
-    # elif search_type == "reviews":
-    #     publication_type_filter = "+AND+Review[Publication+Type]"
-    # else:
-    #     raise ValueError("Invalid search_type parameter. Use 'all', 'clinical trials', or 'reviews'.")
-
-    current_year = datetime.now().year
-    start_year = current_year - years_back
-    # search_query = f"{search_terms_encoded}{publication_type_filter}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
-    search_query = f"{search_terms}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
-    # st.write(f"HI Search query: {search_query}")
-
-    url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={max_results}&api_key={st.secrets['pubmed_api_key']}"
-
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        data = response.json()
-
-        if (
-            "count" in data["esearchresult"]
-            and int(data["esearchresult"]["count"]) == 0
-        ):
-            st.write(
-                "No results found. Try a different search or try again after re-loading the page."
-            )
-            return [], []
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error fetching search results: {e}")
-        return [], []
-
-    ids = data["esearchresult"]["idlist"]
-    if not ids:
-        st.write("No results found.")
-        return [], []
-
-    id_str = ",".join(ids)
-    details_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?db=pubmed&id={id_str}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
-    abstracts_url = f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=pubmed&id={id_str}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
-
-    articles = []
-    unique_urls = set()
-
-    try:
-        details_response = requests.get(details_url)
-        details_response.raise_for_status()
-        details_data = details_response.json()
-
-        abstracts_response = requests.get(abstracts_url)
-        abstracts_response.raise_for_status()
-        abstracts_data = abstracts_response.text
-
-        for id in ids:
-            if "result" in details_data and str(id) in details_data["result"]:
-                article = details_data["result"][str(id)]
-                year = article["pubdate"].split(" ")[0]
-                if year.isdigit():
-                    abstract = extract_abstract_from_xml(abstracts_data, id)
-                    article_url = f"https://pubmed.ncbi.nlm.nih.gov/{id}"
-                    articles.append(
-                        {
-                            "title": article["title"],
-                            "year": year,
-                            "link": article_url,
-                            "abstract": abstract.strip()
-                            if abstract.strip()
-                            else "No abstract available",
-                        }
-                    )
-                    unique_urls.add(article_url)
-            else:
-                st.warning(f"Details not available for ID {id}")
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error fetching details or abstracts: {e}")
-
-    return articles, list(unique_urls)
-
-
+# Real-time internet search using RapidAPI
 def realtime_search(query, domains, max, start_year=2020):
     url = "https://real-time-web-search.p.rapidapi.com/search"
     full_query = f"{query} AND ({domains})"
-
-    # st.write(f'Full Query: {full_query}')
-
-    # Define the start date and the current date
     start_date = f"{start_year}-01-01"
     end_date = datetime.now().strftime("%Y-%m-%d")
-
-    # Include the date range in the query string
     querystring = {"q": full_query, "limit": max, "from": start_date, "to": end_date}
-
     headers = {
         "X-RapidAPI-Key": st.secrets["X-RapidAPI-Key"],
         "X-RapidAPI-Host": "real-time-web-search.p.rapidapi.com",
     }
-
     try:
         response = requests.get(url, headers=headers, params=querystring)
         response.raise_for_status()
@@ -863,112 +951,103 @@ def realtime_search(query, domains, max, start_year=2020):
     except requests.exceptions.RequestException as e:
         st.error(f"RapidAPI real-time search failed to respond: {e}")
         return [], []
-
     return snippets, urls
 
 
-# @cached(ttl=None, cache=Cache.MEMORY)
+#########################################
+# OpenAI API Helper Functions for Chat Completions
+#########################################
+# Retrieve a single response asynchronously
 async def get_response(messages, model=experts_model):
     async with aiohttp.ClientSession() as session:
+        payload = {"model": model, "messages": messages}
+        if model != "o3-mini":
+            payload["temperature"] = 0.3
         response = await session.post(
             "https://api.openai.com/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
-            json={
-                "model": model,
-                "messages": messages,
-                "temperature": 0.3,
-            },
+            json=payload,
         )
         return await response.json()
 
 
-# @cached(ttl=None, cache=Cache.MEMORY)
+# Retrieve multiple responses concurrently
 async def get_responses(queries):
     tasks = [get_response(query) for query in queries]
     return await asyncio.gather(*tasks)
 
 
+#########################################
+# Text Cleaning and Source Refinement Functions
+#########################################
 def clean_text(text):
-    text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
+    text = LOWER_UPPER_PATTERN.sub(r"\1 \2", text)
     text = text.replace("-", " ").replace(" .", ".")
-    text = re.sub(r"\s{2,}", " ", text)  # Replace multiple spaces with a single space
+    text = re.sub(r"\s{2,}", " ", text)
     return text
 
 
 def refine_output(data):
     all_sources = ""
-    for i, (text, info) in enumerate(
-        sorted(data, key=lambda x: x[1]["score"], reverse=True)[:8], 1
+    # Sort the citations by score in descending order and take the top 8
+    for i, citation in enumerate(
+        sorted(data, key=lambda x: x.get("score", 0), reverse=True)[:8], 1
     ):
-        normalized_score = round(
-            info["score"] * 100, 2
-        )  # Assuming score is between 0 and 1
+        normalized_score = round(citation.get("score", 0) * 100, 2)
         all_sources += f"**Source {i} (Relevance: {normalized_score}%)**\n\n"
-
-        if "url" in info:
-            all_sources += f"[Link to source]({info['url']})\n\n"
-
-        cleaned_text = clean_text(text)
-        # Limit text to first 3000 characters
+        if "url" in citation:
+            all_sources += f"[Link to source]({citation['url']})\n\n"
+        # Clean and truncate the context text
+        cleaned_text = clean_text(citation.get("context", ""))
         truncated_text = (
             cleaned_text[:3000] + "..." if len(cleaned_text) > 3000 else cleaned_text
         )
         all_sources += f"{truncated_text}\n\n"
-
+        # Check for the presence of tabular data
         if "Table" in cleaned_text:
             all_sources += "This source contained tabular data.\n\n"
-
-        all_sources += "---\n\n"  # Separator between sources
-
+        all_sources += "---\n\n"
     return all_sources
 
 
-def process_data(data):
-    # Sort the data based on the score in descending order and select the top three
-    top_three = sorted(data, key=lambda x: x[1]["score"], reverse=True)[:3]
-
-    # Format each text entry
-    for text, info in top_three:
-        cleaned_text = clean_text(text)
-        st.write(f"Score: {info['score']}\nText: {cleaned_text}\n")
-
-
+#########################################
+# Local Database Path for the EmbedChain App
+#########################################
 def get_db_path():
-    # tmpdirname = tempfile.mkdtemp()
-    tmpdirname = tempfile.mkdtemp(prefix="db_")
-    return tmpdirname
+    return tempfile.mkdtemp(prefix="db_")
 
 
+#########################################
+# Helper Function to Extract Expert Information from JSON
+#########################################
 def extract_expert_info(json_input):
-    # Parse the JSON input
     data = json.loads(json_input)
-
-    # Initialize empty lists to hold the extracted information
     experts = []
     domains = []
     expert_questions = []
-
-    # Iterate over the rephrased questions and extract the information
     for item in data["rephrased_questions"]:
         experts.append(item["expert"])
         domains.append(item["domain"])
         expert_questions.append(item["question"])
-
     return experts, domains, expert_questions
 
 
+#########################################
+# Function to Create Chat Completion (with Caching)
+#########################################
 @st.cache_data
 def create_chat_completion(
     messages,
+    google=False,
     model="gpt-4o",
     frequency_penalty=0,
     logit_bias=None,
     logprobs=False,
     top_logprobs=None,
-    max_tokens=None,
+    max_completion_tokens=5000,
     n=1,
     presence_penalty=0,
     response_format=None,
@@ -977,73 +1056,79 @@ def create_chat_completion(
     stream=False,
     include_usage=False,
     temperature=1,
-    # top_p=1,
     tools=None,
     tool_choice="none",
     user=None,
 ):
-    client = OpenAI()
+    
+    if model == "o3-mini":
+        # Insert the developer message at the start of the messages list.
+        messages.insert(0, {
+            "role": "developer",
+            "content": [
+                {
+                    "type": "text",
+                    "text": "Formatting re-enabled"
+                }
+            ]
+        })
+    if google:
+        client = OpenAI(
+            api_key=st.secrets["GOOGLE_API_KEY"],
+            base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+        )
+        params = {
+            "model": model,
+            "messages": messages,
+            "stream": stream,
+            "temperature": temperature,
+        }
+    else:
+        client = OpenAI()
+        params = {
+            "model": model,
+            "messages": messages,
+            "frequency_penalty": frequency_penalty,
+            "logit_bias": logit_bias,
+            "logprobs": logprobs,
+            "top_logprobs": top_logprobs,
+            "max_completion_tokens": max_completion_tokens,
+            "n": n,
+            "presence_penalty": presence_penalty,
+            "response_format": response_format,
+            "seed": seed,
+            "stop": stop,
+            "stream": stream,
+            "temperature": temperature,
+            "user": user,
+        }
+    if model == "o3-mini":
+        params.pop("temperature", None)
+        params["reasoning_effort"] = "medium"
 
-    # Prepare the parameters for the API call
-    params = {
-        "model": model,
-        "messages": messages,
-        "frequency_penalty": frequency_penalty,
-        "logit_bias": logit_bias,
-        "logprobs": logprobs,
-        "top_logprobs": top_logprobs,
-        "max_tokens": max_tokens,
-        "n": n,
-        "presence_penalty": presence_penalty,
-        "response_format": response_format,
-        "seed": seed,
-        "stop": stop,
-        "stream": stream,
-        "temperature": temperature,
-        # "top_p": top_p,
-        "user": user,
-    }
-
-    # Handle the include_usage option for streaming
     if stream:
         params["stream_options"] = {"include_usage": include_usage}
     else:
         params.pop("stream_options", None)
-
-    # Handle tools and tool_choice properly
     if tools:
         params["tools"] = [{"type": "function", "function": tool} for tool in tools]
         params["tool_choice"] = tool_choice
-
-    # Handle response_format properly
     if response_format == "json_object":
         params["response_format"] = {"type": "json_object"}
     elif response_format == "text":
         params["response_format"] = {"type": "text"}
-    else:
-        params.pop("response_format", None)
-
-    # Remove keys with None values
-    params = {k: v for k, v in params.items() if v != None}
-
+    params = {k: v for k, v in params.items() if v is not None}
     completion = client.chat.completions.create(**params)
-
     return completion
 
 
-import streamlit as st
-
-
+#########################################
+# Password Checking for Secure Access
+#########################################
 def check_password() -> bool:
-    """
-    Check if the entered password is correct and manage login state.
-    Also resets the app when a user successfully logs in.
-    """
-    # Early return if st.secrets["docker"] == "docker"
     if st.secrets["docker"] == "docker":
         st.session_state.password_correct = True
         return True
-    # Initialize session state variables
     if "password" not in st.session_state:
         st.session_state.password = ""
     if "password_correct" not in st.session_state:
@@ -1052,11 +1137,9 @@ def check_password() -> bool:
         st.session_state.login_attempts = 0
 
     def password_entered() -> None:
-        """Callback function when password is entered."""
         if st.session_state["password"] == st.secrets["password"]:
             st.session_state["password_correct"] = True
             st.session_state.login_attempts = 0
-            # Reset the app
             app = App()
             app.reset()
             del st.session_state["password"]
@@ -1064,32 +1147,65 @@ def check_password() -> bool:
             st.session_state["password_correct"] = False
             st.session_state.login_attempts += 1
 
-    # Check if password is correct
     if not st.session_state["password_correct"]:
         st.text_input(
             "Password", type="password", on_change=password_entered, key="password"
         )
-
         if st.session_state.login_attempts > 0:
             st.error(
                 f"😕 Password incorrect. Attempts: {st.session_state.login_attempts}"
             )
-
         st.write(
             "*Please contact David Liebovitz, MD if you need an updated password for access.*"
         )
         return False
-
     return True
 
 
+#########################################
+# Main Function: Orchestrates the App UI and Workflow
+#########################################
 def main():
     st.title("Helpful Answers with AI!")
+    current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db_path = get_db_path()
-    app = App.from_config(
-        config={
+    # query_config = BaseLlmConfig(number_documents=15, model=rag_model)
+    # Configure the EmbedChain app based on the selected RAG model
+    rag_model = "o3-mini"
+    rag_provider = "openai"
+    if embedder_provider == "google":
+        embedder_config = {"model": embedder_model}
+    else:
+        embedder_config = {"api_key": embedder_api_key, "model": embedder_model}
+    if rag_model == "o3-mini":
+        config = {
             "llm": {
-                "provider": provider,
+                "provider": rag_provider,
+                "config": {"model": rag_model, "stream": False, "api_key": rag_key},
+            },
+            "vectordb": {
+                "provider": "chroma",
+                "config": {
+                    "collection_name": "ai-helper",
+                    "dir": db_path,
+                    "allow_reset": True,
+                },
+            },
+            "embedder": {
+                "provider": embedder_provider,
+                "config": embedder_config
+            },
+            "chunker": {
+                "chunk_size": 4500,
+                "chunk_overlap": 100,
+                "length_function": "len",
+                "min_chunk_size": 2000,
+            },
+        }
+    else:
+        config = {
+            "llm": {
+                "provider": rag_provider,
                 "config": {
                     "model": rag_model,
                     "temperature": 0.5,
@@ -1106,40 +1222,51 @@ def main():
                 },
             },
             "embedder": {
-                "provider": "openai",
-                "config": {"api_key": api_key, "model": embedder_model},
+                "provider": embedder_provider,
+                "config": embedder_config
             },
             "chunker": {
-                "chunk_size": 1000,  # Smaller chunk size to keep text coherent and manageable
-                "chunk_overlap": 50,  # Ensure overlapping regions capture context between chunks
-                "length_function": "len",  # Use 'len' to calculate length as number of characters
-                "min_chunk_size": 200,  # Avoid chunks that are too small and lose context
+                "chunk_size": 5000,
+                "chunk_overlap": 100,
+                "length_function": "len",
+                "min_chunk_size": 2000,
             },
         }
-    )
+    # Create a custom initialization that bypasses the alembic migration
+    try:
+        # First attempt without any special handling
+        app = None
+        try:
+            app = App.from_config(config=config)
+        except KeyError as ke:
+            if str(ke) == "'script'":
+                # Handle the specific alembic error by creating a simpler app
+                # Create a basic app without the full config to avoid alembic
+                app = App()
+                # Then manually set the config components we need
+                if "vectordb" in config:
+                    app.db = config["vectordb"]
+                if "embedder" in config:
+                    app.embedder = config["embedder"]
+                if "llm" in config and config["llm"].get("provider"):
+                    app.llm_provider = config["llm"]["provider"]
+                    app.llm_config = config["llm"].get("config", {})
+            else:
+                st.error(f"Error initializing App: {ke}")
+    except Exception as e:
+        st.error(f"Error initializing App: {e}")
+        app = None
     with st.expander("About this app"):
-        st.info("""This app interprets a user query and retrieves content from selected internet domains (including PubMed if applicable) for an initial answer and then asks AI personas their 
-        opinions on the topic after providing them with updated content, too. Approaches shown to improve outputs like [chain of thought](https://arxiv.org/abs/2201.11903), 
-        [expert rephrasing](https://arxiv.org/html/2311.04205v2), and [chain of verification](https://arxiv.org/abs/2309.11495)
-        are applied to improve the quality of the responses and to reduce hallucination. Web sites are identified,processed and 
-        content selectively retrieved for answers using [Real-Time Web Search](https://rapidapi.com/letscrape-6bRBa3QguO5/api/real-time-web-search) 
-        and the [EmbedChain](https://embedchain.ai/) library. The LLM model is [GPT-4o](https://openai.com/index/hello-gpt-4o/) from OpenAI.
-        App author is David Liebovitz, MD
-        """)
-
+        st.info(
+            """This app interprets a user query and retrieves content from selected internet domains (including PubMed if applicable) for an initial answer and then asks AI personas their opinions on the topic after providing them with updated content. Approaches shown to improve outputs like chain of thought, expert rephrasing, and chain of verification are applied to improve the quality of the responses and to reduce hallucination. Web sites are identified, processed and content selectively retrieved for answers using Real-Time Web Search and the EmbedChain library. The default main LLM model is o3-mini with medium reasoning from OpenAI. App author is David Liebovitz, MD"""
+        )
     st.info("Please validate all guidance using the sources!")
-
-    # st.info("""This app is more complex than it appears. Your question is analyzed, specific internet resouces are retrieved, including
-    #         relevant PubMed review articles if applicable. A preliminary answer is generated. Three alternative personas using retrieved information
-    #         are then asked to provide their opinions on the topic.""")
-
     col1, col2 = st.columns([1, 1])
-
     if check_password():
-        # Obtain the initial query from the user
+        # Get user query
         with col1:
             original_query = st.text_area(
-                "Ask a nice question from *Which antibiotic to use for Lyme disease* to *How are the Chicago Cubs doing*!",
+                "Ask a nice question...",
                 placeholder="Enter your question here...",
                 help="Ask any knowledge-based question.",
             )
@@ -1148,32 +1275,18 @@ def main():
             {"role": "system", "content": system_prompt_expert_questions},
             {"role": "user", "content": original_query},
         ]
-
         determine_domain_messages = [
             {"role": "system", "content": choose_domain},
             {"role": "user", "content": original_query},
         ]
-
-        # Add radio buttons for domain selection
-
-        # using_pubmed = st.checkbox("Include PubMed Abstracts", help = "Check to include PubMed in the search for medical content.", value = True)
-        # # search_type = st.selectbox("Select search type:", ["all", "clinical trials", "reviews"], index=0)
-
-        # with st.sidebar:
-        #     st.info("Exa.ai is a new type of search tool that predicts relevant sites. Helpful for general knowledge, not for specialized medical or current events.")
         first_view = False
         col2.write(" ")
         col2.write(" ")
         col2.write(" ")
-        if st.sidebar.checkbox(
-            "Include Cutting-Edge Research in PubMed (default is consensus review articles)",
-            help="Check to include latest, not yet consensus, articles in the search for medical content.",
-            value=False,
-        ):
-            pubmed_prompt = cutting_edge_pubmed_prompt
-        else:
-            pubmed_prompt = optimize_pubmed_search_terms_system_prompt
+
         if col2.button("Begin Research"):
+            # Reset session variables for a new research session
+            first_view = True
             st.session_state.articles = []
             st.session_state.pubmed_search_terms = ""
             st.session_state.chosen_domain = ""
@@ -1185,173 +1298,260 @@ def main():
             st.session_state.initial_response_thread = []
             st.session_state.final_thread = []
             st.session_state.thread_with_tavily_context = []
-
+            st.session_state.tavily_initial_response = []
+            st.session_state.faithfulness_score = None
+            st.session_state.rubrics_score = None
             with col1:
-                with st.spinner("Determining the best domain for your question..."):
-                    restrict_domains_response = create_chat_completion(
-                        determine_domain_messages,
-                        model=topic_model,
-                        temperature=0.3,
-                    )
-                    st.session_state.chosen_domain = restrict_domains_response.choices[
-                        0
-                    ].message.content
-
-                    print(f"Here is the domain: {st.session_state.chosen_domain}")
-                    # Update the `domains` variable based on the selection
-                if (
-                    st.session_state.chosen_domain == "medical"
-                    and internet_search_provider == "Google"
-                ):
-                    if edited_medical_domains == medical_domains:
-                        domains = medical_domains
-                    else:
-                        domains = edited_medical_domains
-
-                else:
-                    if internet_search_provider == "Google":
-                        # if edited_reliable_domains == reliable_domains:
-                        domains = st.session_state.chosen_domain
-                try:
-                    if len(app.get_data_sources()) > 0:
-                        # st.divider()
-                        app.reset()
-
-                except:
-                    st.error("Error resetting app; just proceed")
-
-                current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                search_messages = [
-                    {"role": "system", "content": optimize_search_terms_system_prompt},
-                    {
-                        "role": "user",
-                        "content": f"considering it is {current_datetime}, {original_query}",
-                    },
-                ]
-                with st.spinner("Optimizing search terms..."):
-                    try:
-                        response_google_search_terms = create_chat_completion(
-                            search_messages,
-                            temperature=0.3,
-                        )
-                    except Exception as e:
-                        st.error(f"Error during OpenAI call: {e}")
-                google_search_terms = response_google_search_terms.choices[
-                    0
-                ].message.content
-                # st.write(f'Here are the total tokens used: {response_google_search_terms.usage.total_tokens}')
-                # st.write(f'Here are the prompt tokens used: {response_google_search_terms.usage.prompt_tokens}')
-                # st.write(f'Here are the response tokens used: {response_google_search_terms.usage.completion_tokens}')
-                # st.write(f' here is the domain for logic: {st.session_state.chosen_domain}')
-                st.session_state.chosen_domain = st.session_state.chosen_domain.replace(
-                    '"', ""
-                ).replace("'", "")
-                if st.session_state.chosen_domain == "medical":
+                
+                if short_use_case == "Helpful PubMed Query":
                     pubmed_messages = [
                         {"role": "system", "content": pubmed_prompt},
                         {"role": "user", "content": original_query},
                     ]
                     response_pubmed_search_terms = create_chat_completion(
-                        pubmed_messages,
-                        temperature=0.3,
+                        pubmed_messages, temperature=0.3
                     )
                     pubmed_search_terms = response_pubmed_search_terms.choices[
                         0
                     ].message.content
-                    # st.write(f'Here are the pubmed terms: {pubmed_search_terms}')
                     st.session_state.pubmed_search_terms = pubmed_search_terms
-                    with st.spinner(f'Searching PubMed for "{pubmed_search_terms}"...'):
-                        articles = asyncio.run(
-                            pubmed_abstracts(
-                                pubmed_search_terms,
-                                search_type,
-                                max_results,
-                                years_back,
-                            )
+                    st.page_link(
+                        "https://pubmed.ncbi.nlm.nih.gov/?term="
+                        + st.session_state.pubmed_search_terms,
+                        label=":green[Click here to open your consensus focused PubMed search!]",
+                        icon="📚",
+                    )                    
+                    st.stop()
+                    
+                if short_use_case == "Helpful Internet Sites":
+                    with st.spinner("Determining the best domain for your question..."):
+                        restrict_domains_response = create_chat_completion(
+                            determine_domain_messages,
+                            model=topic_model,
+                            temperature=0.3,
                         )
-                    st.session_state.articles = articles
-                    with st.spinner("Adding PubMed abstracts to the knowledge base..."):
-                        if articles != []:
-                            for article in articles:
-                                retries = 3
-                                success = False
-                                while retries > 0 and not success:
-                                    try:
-                                        # Ensure article is treated as a dictionary
-                                        if not isinstance(article, dict):
-                                            raise ValueError(
-                                                "Article is not a valid dictionary."
-                                            )
-
-                                        link = article.get("link")
-                                        title = article.get("title", "[No Title]")
-
-                                        if not link:
-                                            raise ValueError(
-                                                "Article does not contain a 'link' key."
-                                            )
-
-                                        app.add(link, data_type="web_page")
-                                        success = True  # Mark as successful if no exception occurs
-
-                                        # st.sidebar.markdown(f"### [{title}]({link})")  # Display the successfully added article
-                                    except Exception as e:
-                                        retries -= 1
-                                        logger.error(
-                                            f"Error adding article {article}: {str(e)}"
-                                        )
-                                        if retries > 0:
-                                            time.sleep(
-                                                1
-                                            )  # Optional: Add a short delay between retries
-                                        else:
-                                            st.error(
-                                                "PubMed results did not meet relevance and recency check. Click the PubMed link to view."
-                                            )
-
-                        # if urls:
-                        #     successful_urls = []
-                        #     failed_urls = []
-                        #     for url in urls:
-                        #         try:
-                        #             app.add(str(url), data_type='web_page')
-                        #             successful_urls.append(url)
-                        #         except RequestException as e:
-                        #             logger.error(f"Connection error for URL {url}: {str(e)}")
-                        #             failed_urls.append(url)
-                        #         except Exception as e:
-                        #             logger.error(f"Unexpected error for URL {url}: {str(e)}")
-                        #             failed_urls.append(url)
-
-                        # if successful_urls:
-                        #     st.success(f"Successfully added {len(successful_urls)} URLs to the knowledge base.")
-
-                        # if failed_urls:
-                        #     st.warning(f"Failed to add {len(failed_urls)} URLs. You may want to try these again.")
-                        #     if st.button("Show failed URLs"):
-                        #         st.write(failed_urls)
-
-                    if not articles:
-                        st.warning(
-                            "No recent and relevant PubMed articles identified for the knowledge base."
+                        st.session_state.chosen_domain = (
+                            restrict_domains_response.choices[0].message.content
                         )
-                        st.write(
-                            f"**Search Strategy Used:** {st.session_state.pubmed_search_terms}"
+                    if (
+                        st.session_state.chosen_domain == "medical"
+                        and internet_search_provider == "Google"
+                    ):
+                        domains = (
+                            edited_medical_domains
+                            if edited_medical_domains != medical_domains
+                            else medical_domains
                         )
-
                     else:
-                        with st.spinner("Optimizing display of abstracts..."):
-                            try:
-                                with st.expander(
-                                    "View PubMed Results Added to Knowledge Base"
-                                ):
-                                    # st.warning(f"Note this is a focused PubMed search with {max_results} results added to the database.")
-                                    # st.write(f'**Search Strategy:** {pubmed_search_terms}')
+                        if internet_search_provider == "Google":
+                            domains = st.session_state.chosen_domain
+                    if app is not None:
+                        try:
+                            if len(app.get_data_sources()) > 0:
+                                app.reset()
+                        except Exception as e:
+                            st.error(f"Error resetting app: {e}; just proceed")
+
+                    search_messages = [
+                        {
+                            "role": "system",
+                            "content": optimize_search_terms_system_prompt,
+                        },
+                        {
+                            "role": "user",
+                            "content": f"considering it is {current_datetime}, {original_query}",
+                        },
+                    ]
+                    with st.spinner("Optimizing search terms..."):
+                        try:
+                            response_google_search_terms = create_chat_completion(
+                                search_messages, temperature=0.3
+                            )
+                        except Exception as e:
+                            st.error(f"Error during OpenAI call: {e}")
+                    google_search_terms = response_google_search_terms.choices[0].message.content
+                    with st.spinner(f'Searching for "{google_search_terms}"...'):
+                        if internet_search_provider == "Google":
+                            st.session_state.snippets, st.session_state.urls = (
+                                realtime_search(
+                                    google_search_terms, domains, site_number
+                                )
+                            )
+                        else:
+                            three_years_ago = datetime.now() - timedelta(
+                                days=3 * 365.25
+                            )
+                            date_cutoff = three_years_ago.strftime("%Y-%m-%d")
+                            search_response = exa.search_and_contents(
+                                google_search_terms,
+                                text={
+                                    "include_html_tags": False,
+                                    "max_characters": 1000,
+                                },
+                                highlights={
+                                    "highlights_per_url": 2,
+                                    "num_sentences": 5,
+                                    "query": "This is the highlight query:",
+                                },
+                                start_published_date=date_cutoff,
+                            )
+                            st.session_state.snippets = [
+                                result.text for result in search_response.results
+                            ]
+                            st.session_state.urls = [
+                                result.url for result in search_response.results
+                            ]
+                    with st.expander("Internet Sources", expanded=True):
+                        if internet_search_provider == "Google":
+                            for snippet in st.session_state.snippets:
+                                st.markdown(snippet.replace("<END OF SITE>", ""))
+                        else:
+                            for i, snippet in enumerate(st.session_state.snippets):
+                                st.markdown(
+                                    f"### Source {i + 1}: {st.session_state.urls[i]}"
+                                )
+                                st.markdown(snippet)
+                    
+                    
+                    
+                    
+                    
+                    st.stop()
+                    
+                # Deeper Dive: Includes PubMed search and web search
+                if deeper_dive:
+                    with st.spinner("Determining the best domain for your question..."):
+                        restrict_domains_response = create_chat_completion(
+                            determine_domain_messages,
+                            model=topic_model,
+                            temperature=0.3,
+                        )
+                        st.session_state.chosen_domain = (
+                            restrict_domains_response.choices[0].message.content
+                        )
+                    if (
+                        st.session_state.chosen_domain == "medical"
+                        and internet_search_provider == "Google"
+                    ):
+                        domains = (
+                            edited_medical_domains
+                            if edited_medical_domains != medical_domains
+                            else medical_domains
+                        )
+                    else:
+                        if internet_search_provider == "Google":
+                            domains = st.session_state.chosen_domain
+                    try:
+                        if len(app.get_data_sources()) > 0:
+                            app.reset()
+                    except:
+                        st.error("Error resetting app; just proceed")
+
+                    search_messages = [
+                        {
+                            "role": "system",
+                            "content": optimize_search_terms_system_prompt,
+                        },
+                        {
+                            "role": "user",
+                            "content": f"considering it is {current_datetime}, {original_query}",
+                        },
+                    ]
+                    with st.spinner("Optimizing search terms..."):
+                        try:
+                            response_google_search_terms = create_chat_completion(
+                                search_messages, temperature=0.3
+                            )
+                        except Exception as e:
+                            st.error(f"Error during OpenAI call: {e}")
+                    google_search_terms = response_google_search_terms.choices[
+                        0
+                    ].message.content
+                    st.session_state.chosen_domain = (
+                        st.session_state.chosen_domain.replace('"', "").replace("'", "")
+                    )
+                    if st.session_state.chosen_domain == "medical" and short_use_case == "Answer the Question":
+                        pubmed_messages = [
+                            {"role": "system", "content": pubmed_prompt},
+                            {"role": "user", "content": original_query},
+                        ]
+                        response_pubmed_search_terms = create_chat_completion(
+                            pubmed_messages, temperature=0.3
+                        )
+                        pubmed_search_terms = response_pubmed_search_terms.choices[
+                            0
+                        ].message.content
+                        st.session_state.pubmed_search_terms = pubmed_search_terms
+                        with st.spinner(
+                            f'Searching PubMed for "{pubmed_search_terms}"...'
+                        ):
+                            articles = asyncio.run(
+                                pubmed_abstracts(
+                                    pubmed_search_terms,
+                                    search_type,
+                                    max_results,
+                                    years_back,
+                                )
+                            )
+                        st.session_state.articles = articles
+                        with st.spinner(
+                            "Adding PubMed abstracts to the knowledge base..."
+                        ):
+                            if articles:
+                                for article in articles:
+                                    retries = 3
+                                    success = False
+                                    while retries > 0 and not success:
+                                        try:
+                                            if not isinstance(article, dict):
+                                                raise ValueError(
+                                                    "Article is not a valid dictionary."
+                                                )
+                                            link = article.get("link")
+                                            if not link:
+                                                raise ValueError(
+                                                    "Article does not contain a 'link' key."
+                                                )
+                                            if app is not None:
+                                                app.add(link, data_type="web_page")
+                                            success = True
+                                        except ValueError as ve:
+                                            logger.error(f"Value error: {ve}")
+                                            retries -= 1
+                                        except Exception as e:
+                                            logger.error(f"Unexpected error: {e}")
+                                        except Exception as e:
+                                            retries -= 1
+                                            logger.error(
+                                                f"Error adding article {article}: {str(e)}"
+                                            )
+                                            if retries > 0:
+                                                time.sleep(1)
+                                            else:
+                                                st.error(
+                                                    "PubMed results did not meet relevance and recency check. Click the PubMed link to view."
+                                                )
+                        if not articles:
+                            st.warning(
+                                "No recent and relevant PubMed articles identified for the knowledge base."
+                            )
+                            st.page_link(
+                                "https://pubmed.ncbi.nlm.nih.gov/?term="
+                                + st.session_state.pubmed_search_terms,
+                                label="Click here to try directly in PubMed",
+                                icon="📚",
+                            )
+                            with st.popover("PubMed Search Terms"):
+                                st.write(
+                                    f"**Search Strategy:** {st.session_state.pubmed_search_terms}"
+                                )
+                        else:
+                            with st.spinner("Optimizing display of abstracts..."):
+                                with st.expander("View PubMed Results While Waiting"):
                                     pubmed_link = (
                                         "https://pubmed.ncbi.nlm.nih.gov/?term="
                                         + st.session_state.pubmed_search_terms
                                     )
-                                    # st.write("[View PubMed Search Results]({pubmed_link})")
                                     st.page_link(
                                         pubmed_link,
                                         label="Click here to view in PubMed",
@@ -1361,382 +1561,521 @@ def main():
                                         st.write(
                                             f"**Search Strategy:** {st.session_state.pubmed_search_terms}"
                                         )
-                                    # st.write(f'Article Types (may change in left sidebar): {search_type}')
                                     for article in articles:
-                                        # st.markdown(f"### [{article['title']}]({article['link']})")
-                                        # st.markdown(f"### {article['title']}")
                                         st.markdown(
                                             f"### [{article['title']}]({article['link']})"
                                         )
                                         st.write(f"Year: {article['year']}")
-                                        if article["abstract"]:
-                                            st.write(article["abstract"])
-                                        else:
-                                            st.write("No abstract available")
-
-                            except:
-                                st.write(
-                                    "No relevant and recent PubMed articles to include in the knowledge base."
+                                        st.write(
+                                            article["abstract"]
+                                            if article["abstract"]
+                                            else "No abstract available"
+                                        )
+                    with st.spinner(f'Searching for "{google_search_terms}"...'):
+                        if internet_search_provider == "Google":
+                            st.session_state.snippets, st.session_state.urls = (
+                                realtime_search(
+                                    google_search_terms, domains, site_number
                                 )
-
-                with st.spinner(f'Searching for "{google_search_terms}"...'):
-                    if internet_search_provider == "Google":
-                        # st.markdown(f"**Search Strategy:** {google_search_terms}, Domains: {domains}, site number: {site_number}")
-                        st.session_state.snippets, st.session_state.urls = (
-                            realtime_search(google_search_terms, domains, site_number)
-                        )
-                    else:
-                        three_years_ago = datetime.now() - timedelta(days=3 * 365.25)
-                        date_cutoff = three_years_ago.strftime("%Y-%m-%d")
-                        search_response = exa.search_and_contents(
-                            google_search_terms,
-                            text={"include_html_tags": False, "max_characters": 1000},
-                            highlights={
-                                "highlights_per_url": 2,
-                                "num_sentences": 5,
-                                "query": "This is the highlight query:",
-                            },
-                            start_published_date=date_cutoff,
-                        )
-                        st.session_state.snippets = [
-                            result.text for result in search_response.results
-                        ]
-                        st.session_state.urls = [
-                            result.url for result in search_response.results
-                        ]
-
-                with st.expander("View Internet Results Added to Knowledge Base"):
-                    # st.write(f'**Search Strategy:** {google_search_terms}')
-                    # if st.session_state.chosen_domain != "medical":
-                    #     st.write(f'Domains used: {st.session_state.chosen_domain}')
-                    # for url in st.session_state.urls:
-                    #     # url = url.replace('<END OF SITE>', '')
-                    #     st.markdown(url)
-                    for snippet in st.session_state.snippets:
-                        snippet = snippet.replace("<END OF SITE>", "")
-                        st.markdown(snippet)
-
-                # Initialize a list to store blocked sites
-                blocked_sites = []
-
-                with st.spinner("Retrieving full content from web pages..."):
-                    for site in st.session_state.urls:
+                            )
+                        else:
+                            three_years_ago = datetime.now() - timedelta(
+                                days=3 * 365.25
+                            )
+                            date_cutoff = three_years_ago.strftime("%Y-%m-%d")
+                            search_response = exa.search_and_contents(
+                                google_search_terms,
+                                text={
+                                    "include_html_tags": False,
+                                    "max_characters": 1000,
+                                },
+                                highlights={
+                                    "highlights_per_url": 2,
+                                    "num_sentences": 5,
+                                    "query": "This is the highlight query:",
+                                },
+                                start_published_date=date_cutoff,
+                            )
+                            st.session_state.snippets = [
+                                result.text for result in search_response.results
+                            ]
+                            st.session_state.urls = [
+                                result.url for result in search_response.results
+                            ]
+                    with st.expander("View Reliable Internet Results While Waiting"):
+                        for snippet in st.session_state.snippets:
+                            st.markdown(snippet.replace("<END OF SITE>", ""))
+                    blocked_sites = []
+                    with st.spinner("Retrieving full content from web pages..."):
+                        for site in st.session_state.urls:
+                            if app is not None:
+                                try:
+                                    app.add(site, data_type="web_page")
+                                except Exception:
+                                    blocked_sites.append(site)
+                    # query_config = BaseLlmConfig(number_documents=15, model=rag_model)
+                    with st.spinner("Analyzing retrieved content..."):
                         try:
-                            app.add(site, data_type="web_page")
+                            current_datetime = datetime.now().strftime(
+                                "%Y-%m-%d %H:%M:%S"
+                            )
+                            prepare_rag_query_messages = [
+                                {"role": "system", "content": prepare_rag_query},
+                                {
+                                    "role": "user",
+                                    "content": f"User query to refine: {original_query}",
+                                },
+                            ]
+                            query_for_rag = create_chat_completion(
+                                prepare_rag_query_messages,
+                                model="gpt-4o-mini",
+                                temperature=0.3,
+                            )
+                            updated_rag_query = query_for_rag.choices[0].message.content
 
-                        except Exception:
-                            # Collect the blocked sites
-                            blocked_sites.append(site)
+                        except Exception as e:
+                            st.error(f"Error during rag prep {e}")
+                        try:
+                            if app is not None:
+                                citations = app.search(updated_rag_query, where=None, num_documents=20)
+                            else:
+                                citations = []
+                                st.warning("Search functionality is limited due to initialization error.")
+                            # with st.expander("View full Citations"):
+                            #     display_citations(citations)
+                            #     st.write(f'Just the raw{citations}')
+                            # print(citations)
+                            # citations = [item['metadata']['url'] for item in semantic_results]
+                            # filtered_citations = [
+                            #     {
+                            #         "context": citation.get("context", ""),
+                            #         "url": citation.get("metadata", {}).get("url", ""),
+                            #         "score": citation.get("metadata", {}).get(
+                            #             "score", 0
+                            #         ),
+                            #     }
+                            #     for citation in citations
+                            # ]
+                            
+                            filtered = filter_citations(citations)
+                            # with st.expander("View Filtered Citations"):
+                            #     display_citations(filtered)
+                            #     st.write(f'Just the filtered full{filtered}')
+                            st.session_state.citations = filtered
+                            # st.markdown(f"**Citations just after filtering:** {filtered_citations}")
+                        except Exception as e:
+                            st.error(f"Error during semantic query: {e}")
+                        try:
+                            updated_answer_prompt = rag_prompt2.format(
+                                question=original_query,
+                                context=st.session_state.citations,
+                            )
+                            prepare_updated_answer_messages = [
+                                {"role": "user", "content": updated_answer_prompt}
+                            ]
+                            if second_provider == "openai":
+                                updated_answer = create_chat_completion(
+                                    prepare_updated_answer_messages,
+                                    model=second_model,
+                                    temperature=0.3,
+                                )
+                                updated_answer_text = updated_answer.choices[
+                                    0
+                                ].message.content
+                            elif second_provider == "anthropic":
+                                client = anthropic.Anthropic(api_key=api_key_anthropic)
+                                updated_answer = client.messages.create(
+                                    model=second_model,
+                                    messages=prepare_updated_answer_messages,
+                                    temperature=0.3,
+                                    max_tokens=1500,
+                                )
+                                updated_answer_text = updated_answer.content[0].text
+                            elif second_provider == "google":
+                                updated_answer = create_chat_completion(
+                                    prepare_updated_answer_messages,
+                                    google=True,
+                                    model=second_model,
+                                    temperature=0.3,
+                                )
+                                updated_answer_text = updated_answer.choices[
+                                    0
+                                ].message.content
+                        except Exception as e:
+                            st.error(f"Error during second pass: {e}")
+                        # full_response = ""
 
-                # if blocked_sites:
-                #     with st.sidebar:
-                #         with st.expander("Sites Blocking Use"):
-                #             for site in blocked_sites:
-                #                 st.error(f"This site, {site}, won't let us retrieve content. Skipping it.")
+                        # if citations:
+                        #     # st.write(st.session_state.citations)
+                        if updated_answer is not None:
+                            st.session_state.full_initial_response = updated_answer_text
+                    #     first_view = True
 
-                # Create a config with the desired number of documents
-                query_config = BaseLlmConfig(number_documents=15)
-                # llm_config = app.llm.config.as_dict()
-                # config = BaseLlmConfig(**llm_config)
-                with st.spinner("Analyzing retrieved content..."):
-                    try:
-                        # Get the current date and time
-                        current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                        prepare_rag_query_messages = [
-                            {"role": "system", "content": prepare_rag_query},
-                            {
-                                "role": "user",
-                                "content": f"User query to refine: {original_query}",
-                            },
-                        ]
-                        query_for_rag = create_chat_completion(
-                            prepare_rag_query_messages,
-                            model=rag_question_model,
+                    #     full_response += "\n\n**Sources**:\n"
+                    #     sources = []
+                    #     for citation in st.session_state.citations:
+                    #         # Directly get the URL from the citation dictionary.
+                    #         source = citation.get("url", "")
+                    #         pattern = re.compile(r"([^/]+)\.[^\.]+\.pdf$")
+                    #         match = pattern.search(source)
+                    #         if match:
+                    #             source = match.group(1) + ".pdf"
+                    #         sources.append(source)
+
+                    #     # Remove duplicates by converting to a set and back to a list.
+                    #     sources = list(set(sources))
+                    #     for source in sources:
+                    #         full_response += f"- {source}\n"
+
+                    #     st.session_state.rag_response = full_response
+
+                    # st.session_state.source_chunks = refine_output(citations)
+                    container1 = st.container()
+                    with container1:
+                        st.info(f"Response as of **{current_datetime}:**\n\n")
+                        st.markdown(st.session_state.full_initial_response)
+                        display_url_list(st.session_state.citations)
+                        with st.expander("View Sources"):
+                            display_citations(st.session_state.citations)
+                        # with st.expander("View Source Excerpts"):
+                        #     st.markdown(f'Rag Response: {st.session_state.rag_response}')
+                        #     st.markdown(f'Source Chunks: {st.session_state.source_chunks}')
+                        #     st.markdown(f'Citations: {st.session_state.citations}')
+                        #     st.markdown(st.session_state.source_chunks)
+                        if st.button("Create Word Document"):
+                            doc = markdown_to_word(st.session_state.rag_response)
+                            buffer = BytesIO()
+                            doc.save(buffer)
+                            buffer.seek(0)
+                            st.download_button(
+                                label="Download Word Document",
+                                data=buffer,
+                                file_name="prelim_response.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            )
+
+                else:
+                    # Quick search without extensive PubMed search (Tavily search)
+                    with st.spinner("Determining the best domain for your question..."):
+                        restrict_domains_response = create_chat_completion(
+                            determine_domain_messages,
+                            model=topic_model,
                             temperature=0.3,
                         )
-                        updated_rag_query = query_for_rag.choices[0].message.content
-                    except Exception as e:
-                        st.error(f"Error during rag prep {e}")
-                        # updated_rag_query += f'Use the following snippets: {st.session_state.snippets}, abstracts: {st.session_state.articles} AND what you can retrieve for your response.'
-                        # st.write(f"**Query for RAG:** {query_for_rag.choices[0].message.content}")
-                        # Update the query to include the current date and time
-                        # answer, citations = app.query(f"Using only context and considering it's {current_datetime}, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible. If math calculations are required, formulate and execute python code to ensure accurate calculations. User query: {original_query}",
-                        # updated_rag_prompt = rag_prompt.format(xml_query=updated_rag_query, current_datetime=current_datetime)
-
-                    try:
-                        answer, citations = app.query(
-                            updated_rag_query, config=query_config, citations=True
+                        st.session_state.chosen_domain = (
+                            restrict_domains_response.choices[0].message.content
                         )
-                        st.session_state.citations = citations
-
-                    except Exception as e:
-                        st.error(f"Error during rag query: {e}")
-                        # updated_rag_prompt2 = rag_prompt2.format(query=original_query, answer = answer_prelim, current_datetime=current_datetime, search_terms = google_search_terms)
-                        # answer, citations = app.query(updated_rag_prompt2, citations=True)
+                    tavily_initial_search_domains = (
+                        tavily_domains
+                        if st.session_state.chosen_domain == "medical"
+                        else ""
+                    )
                     try:
-                        updated_answer_prompt = rag_prompt2.format(
-                            question=original_query,
-                            prelim_answer=answer,
-                            context=citations,
+                        tavily_client = TavilyClient(
+                            api_key=st.secrets["TAVILY_API_KEY"]
                         )
-                        prepare_updated_answer_messages = [
-                            {"role": "user", "content": updated_answer_prompt}
+                    except Exception as e:
+                        st.error(f"Error during Tavily client initialization: {e}")
+                        return
+                    with st.spinner(
+                        "Accessing reliable internet domains for updates..."
+                    ):
+                        try:
+                            updated_initial_tavily_query = create_chat_completion(
+                                [
+                                    {
+                                        "role": "system",
+                                        "content": "Optimize the user question for submission to an online search engine. Return only the optimized question for use in a python pipeline.",
+                                    },
+                                    {"role": "user", "content": original_query},
+                                ]
+                            )
+                            response = tavily_client.search(
+                                query=updated_initial_tavily_query.choices[
+                                    0
+                                ].message.content,
+                                include_domains=tavily_initial_search_domains,
+                                search_depth="advanced",
+                            )
+                        except json.JSONDecodeError as e:
+                            print(f"Error decoding JSON: {e}")
+                        # st.write(response)
+                        st.session_state.tavily_urls = extract_and_format_urls(response)
+                        results = response.get("results", [])
+                        result_texts = [
+                            f"**Title:** {result['title']}\n\n**URL:** {result['url']}\n\n**Content:** {result['content']}\n\n**Relevancy Score:** {result['score']:.2f}\n\n"
+                            for result in results
                         ]
+                        st.session_state.tavily_initial_response = "\n".join(
+                            result_texts
+                        )
+                    # with st.expander("Retrieved Search Content"):
+                    #     st.write(f'Updated Query: {updated_initial_tavily_query.choices[0].message.content}')
+                    #     st.write("\n\n")
+                    #     st.write(st.session_state.tavily_initial_response)
+                    updated_initial_question_with_tavily = (
+                        original_query
+                        + f" If appropriate, incorporate these updated findings or references from reliable sites; no disclaimers. Users are physicians and expect clear yet dense communication: {st.session_state.tavily_initial_response}"
+                    )
+                    st.session_state.initial_response_thread.append(
+                        {
+                            "role": "user",
+                            "content": updated_initial_question_with_tavily,
+                        }
+                    )
+                    try:
                         updated_answer = create_chat_completion(
-                            prepare_updated_answer_messages,
-                            model=experts_model,
-                            temperature=0.3,
+                            st.session_state.initial_response_thread, model="o3-mini"
                         )
                     except Exception as e:
                         st.error(f"Error during second pass: {e}")
-                        # answer, citations = app.query(f"Using only context, provide the best possible answer to satisfy the user with the supportive evidence noted explicitly when possible: {original_query}", config=config, citations=True)
-
-                full_response = ""
-                if answer:
-                    full_response = f"As of **{current_datetime}:**\n\n{answer} \n\n"
-                    if updated_answer is not None:
-                        full_response += "\n\n **Second Pass Review by AI Below**:\n\n"
-                        full_response += "\n\n *********************\n\n"
-                        full_response += (
-                            f" \n\n {updated_answer.choices[0].message.content}"
+                    if updated_answer:
+                        current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        full_response = (
+                            f"As of **{current_datetime}**:\n\n"
+                            + updated_answer.choices[0].message.content
                         )
                         st.session_state.full_initial_response = full_response
-                    first_view = True
-
-                if citations:
-                    # st.write(f"**Citations:** {citations}")
-                    full_response += "\n\n**Sources**:\n"
-                    sources = []
-                    for i, citation in enumerate(citations):
-                        source = citation[1]["url"]
-                        pattern = re.compile(r"([^/]+)\.[^\.]+\.pdf$")
-                        match = pattern.search(source)
-                        if match:
-                            source = match.group(1) + ".pdf"
-                        sources.append(source)
-                    sources = list(set(sources))
-                    for source in sources:
-                        full_response += f"- {source}\n"
-                    st.session_state.rag_response = full_response
-                container1 = st.container(border=True)
-                # container1.markdown(st.session_state.rag_response)
-
-                st.session_state.source_chunks = refine_output(citations)
+                        first_view = True
+                container1 = col1.container()
                 with container1:
-                    st.info("Initial Response")
-                    st.markdown(st.session_state.rag_response)
-                    if st.button("Create Word Document"):
-                        doc = markdown_to_word(st.session_state.rag_response)
-                        buffer = BytesIO()
-                        doc.save(buffer)
-                        buffer.seek(0)
-
-                        st.download_button(
-                            label="Download Word Document",
-                            data=buffer,
-                            file_name="prelim_response.docx",
-                            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        )
-                    with st.expander("View Source Excerpts"):
-                        st.markdown(st.session_state.source_chunks)
-
+                    if st.session_state.tavily_initial_response:
+                        with st.expander("View Tavily Initial Search Results"):
+                            st.write(st.session_state.tavily_initial_response)
+                        st.info("Initial Response")
+                        st.markdown(st.session_state.full_initial_response)
+                        st.markdown(st.session_state.tavily_urls)
+                        if st.button("Create Word Document for Quick Search"):
+                            doc = markdown_to_word(
+                                st.session_state.full_initial_response
+                            )
+                            buffer = BytesIO()
+                            doc.save(buffer)
+                            buffer.seek(0)
+                            st.download_button(
+                                label="Download Word Document for Quick Search",
+                                data=buffer,
+                                file_name="full_initial_response.docx",
+                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                            )
         with col2:
-            if st.session_state.rag_response:
-                # if st.button("Assess Response Accuracy"):
-                #     prior_context = f'User question: {original_query} Evidence provided:{st.session_state.snippets}, {st.session_state.articles}, and {st.session_state.source_chunks}'
-                #     evaluation_prompt = evaluate_response_prompt.format(prior_context=prior_context, prior_answer=st.session_state.rag_response)
-                #     try:
-                #         confirm_response_messages = [{'role': 'system', 'content': "You are an expert AI evaluator who proceeds step by step and double-checks all your answers since lives may depend on your evaluations."},
-                #                                     {'role': 'user', 'content': evaluation_prompt}]
-                #         confirm_response = create_chat_completion(messages=confirm_response_messages, temperature=0.3)
-                #         st.write(confirm_response.choices[0].message.content)
+            if st.session_state.rag_response or st.session_state.full_initial_response:
+                # RAGAS Model Settings
+                
+                hallucination_check=st.button("Validate Response against Sources")
+                if hallucination_check:
+                    required_keys = ("original_question", "full_initial_response", "citations")
+                    if not all(k in st.session_state for k in required_keys):
+                        st.error("Required input(s) missing from session_state.")
+                    else:
+                        # Step 1: Check for Rubrics score in session_state
+                        if st.session_state.rubrics_score is None:
+                            with st.spinner("Evaluating for Hallucinations..."):
+                                st.session_state["rubrics_score"] = compute_rubrics_score(
+                                    st.session_state["original_question"],
+                                    st.session_state["full_initial_response"],
+                                    st.session_state["citations"],
+                                )
+                                st.success("Validation Score ready!")
+                                st.write(f"**Validation Score:** {st.session_state['rubrics_score']}")
+                                if st.session_state.rubrics_score == 1:
+                                    st.success("Section 1 is fully supported by the sources.")
+                                elif st.session_state.rubrics_score == 2:
+                                    st.error("Caution: Factual statements are supported by the sources but the Section 1 response is not fully accurate and lacks important details. Confirm with references directly.")
+                                elif st.session_state.rubrics_score == 3:
+                                    st.warning("Caution: Some factual statements in Section 1 are not fully supported by the sources. Confirm with references directly.")
+                                elif st.session_state.rubrics_score == 4:
+                                    st.warning("Warning: Section 1 of the response contains some factual errors and lacks important details. Confirm with references directly.")
+                                elif st.session_state.rubrics_score == 5:
+                                    st.error("Warning!!! The model adds new information and statements to Section 1 that contradict the sources. Confirm with references directly.")
+                                else:
+                                    st.error("Error: Unable to evaluate the response.")
+                                # Rerun to proceed to Faithfulness step next
+                                st.rerun()
+                        else:
+                            st.write(f"**Rubrics Score:** {st.session_state['rubrics_score']}")
+                            # Step 2: Check for Faithfulness score in session_state
+                            if st.session_state.faithfulness_score is None:
+                                with st.spinner("Evaluating Faithfulness Score..."):
+                                    st.session_state["faithfulness_score"] = compute_faithfulness_score(
+                                        st.session_state["original_question"],
+                                        st.session_state["full_initial_response"],
+                                        st.session_state["citations"],
+                                    )
+                                    st.success("Faithfulness Score ready!")
+                                    score = st.session_state.get('faithfulness_score')
+                                    if isinstance(score, (int, float)):
+                                        if score >0.9:
+                                            st.success(f"**Faithfulness Score:** {score:.3f}")
+                                        else:
+                                            st.error(f"**Faithfulness Score:** {score:.3f}")
+                                    else:
+                                        st.write("**Faithfulness Score:** N/A")
+                            else:
+                                score = st.session_state.get('faithfulness_score')
+                                if isinstance(score, (int, float)):
+                                    if score >0.9:
+                                        st.success(f"**Faithfulness Score:** {score:.3f}")
+                                    else:
+                                        st.error(f"**Faithfulness Score:** {score:.3f}")
+                                    
+                                else:
+                                    st.write("**Faithfulness Score:** N/A")
 
-                #     except Exception as e:
-                #         st.error(f"Error during OpenAI call: {e}")
-                #         return
 
                 initial_followup = st.checkbox(
                     "Ask Follow-Up Questions for Initial Response"
                 )
                 if initial_followup:
-                    add_internet_content = st.checkbox(
-                        "Quick retrieve of additional internet content", value=False
-                    )
-                    prelim_response = (
-                        st.session_state.rag_response + st.session_state.source_chunks
-                    )
+                    add_internet_content = True
+                    # prelim_response = st.session_state.full_initial_response
                     formatted_output = []
-
                     for citation in st.session_state.citations:
                         try:
-                            # Unpack the citation into source_metadata and source_text
                             source_metadata, source_text = citation
-
-                            # Ensure source_metadata is a dictionary
-                            if isinstance(source_metadata, dict):
-                                # Handle source_metadata dynamically
-                                metadata_details = "\n".join(
+                            metadata_details = (
+                                "\n".join(
                                     f"{key.capitalize()}: {value}"
                                     for key, value in source_metadata.items()
                                 )
-                            else:
-                                # Handle cases where source_metadata is not a dictionary
-                                metadata_details = f"Metadata: {source_metadata}"
-
-                            # Append the source details into a structured format
+                                if isinstance(source_metadata, dict)
+                                else f"Metadata: {source_metadata}"
+                            )
                             formatted_output.append(
                                 f"{metadata_details}\nSource text: {source_text}\n---"
                             )
-                        except ValueError:
-                            # Handle cases where the structure of the citation is not as expected
-                            formatted_output.append(
-                                f"Invalid citation structure: {citation}\n---"
-                            )
                         except Exception as e:
-                            # Catch-all for unexpected errors
                             formatted_output.append(
                                 f"Error processing citation: {citation}\nError: {str(e)}\n---"
                             )
-
-                    # Combine all formatted items into a single string
                     formatted_output_str = "\n".join(formatted_output)
-
-                    # Example: print the result or process it further
-                    print(formatted_output_str)
                     prelim_followup_prompt2 = prelim_followup_prompt.format(
                         prior_question=original_query,
                         evidence=formatted_output_str,
-                        prior_answer=st.session_state.rag_response,
+                        prior_answer=st.session_state.full_initial_response,
                     )
-
-                    if st.session_state.initial_response_thread == []:
+                    if not st.session_state.initial_response_thread:
                         st.session_state.initial_response_thread.append(
                             {"role": "system", "content": prelim_followup_prompt2}
                         )
-                    with col2:
-                        if initial_followup_question := st.chat_input("Ask followup!"):
-                            if add_internet_content:
+                    if initial_followup_question := st.chat_input("Ask followup!"):
+                        if add_internet_content:
+                            try:
+                                tavily_client = TavilyClient(
+                                    api_key=st.secrets["TAVILY_API_KEY"]
+                                )
+                            except Exception as e:
+                                st.error(
+                                    f"Error during Tavily client initialization: {e}"
+                                )
+                                return
+                            with st.spinner(
+                                "Retrieving additional internet content..."
+                            ):
                                 try:
-                                    tavily_client = TavilyClient(
-                                        api_key=st.secrets["TAVILY_API_KEY"]
+                                    updated_tavily_query = create_chat_completion(
+                                        [
+                                            {
+                                                "role": "system",
+                                                "content": "Combine user inputs (an initial and then followup question) into one question optimized for searching online. Return only the optimized question which will be used in a python pipeline.",
+                                            },
+                                            {
+                                                "role": "user",
+                                                "content": f"{original_query} and {initial_followup_question}",
+                                            },
+                                        ]
                                     )
-                                except Exception as e:
-                                    st.error(
-                                        f"Error during Tavily client initialization: {e}"
+                                    response = tavily_client.search(
+                                        query=updated_tavily_query.choices[
+                                            0
+                                        ].message.content,
+                                        include_domains=tavily_domains,
+                                        search_depth="advanced",
                                     )
-                                    return
-                                try:
-                                    with st.spinner(
-                                        "Retrieving additional internet content..."
-                                    ):
-                                        st.session_state.tavily_followup_response = tavily_client.get_search_context(
-                                            query=f"original_query: {original_query} and new question: {initial_followup_question}",
-                                            include_domains=tavily_domains,
-                                            search_depth="advanced",
-                                        )
-                                except Exception as e:
-                                    st.error(
-                                        f"Error during Tavily call (likely require API credits): {e}"
-                                    )
-                                    return
-                                with st.expander("New Retrieved Search Content"):
-                                    st.write(st.session_state.tavily_followup_response)
-                                updated_followup_question = (
-                                    initial_followup_question
-                                    + f"Here's more of what I found online but wnat your thoughts: {st.session_state.tavily_followup_response}"
+                                except json.JSONDecodeError as e:
+                                    print(f"Error decoding JSON: {e}")
+                                results = response.get("results", [])
+                                result_texts = [
+                                    f"**Title:** {result['title']}\n\n**URL:** {result['url']}\n\n**Content:** {result['content']}\n\n**Relevancy Score:** {result['score']:.2f}\n\n"
+                                    for result in results
+                                ]
+                                st.session_state.tavily_followup_response = "\n".join(
+                                    result_texts
                                 )
-                                st.session_state.thread_with_tavily_context = (
-                                    st.session_state.initial_response_thread
+                            with st.expander("New Retrieved Search Content"):
+                                st.write(
+                                    f"Updated Query: {updated_tavily_query.choices[0].message.content}"
                                 )
-                                st.session_state.thread_with_tavily_context.append(
-                                    {
-                                        "role": "user",
-                                        "content": updated_followup_question,
-                                    }
+                                st.write("\n\n")
+                                st.write(st.session_state.tavily_followup_response)
+                            updated_followup_question = (
+                                initial_followup_question
+                                + f"Here's more of what I found online but wnat your thoughts: {st.session_state.tavily_followup_response}"
+                            )
+                            st.session_state.thread_with_tavily_context = (
+                                st.session_state.initial_response_thread
+                            )
+                            st.session_state.thread_with_tavily_context.append(
+                                {"role": "user", "content": updated_followup_question}
+                            )
+                            initial_followup_messages = (
+                                st.session_state.thread_with_tavily_context
+                            )
+                        else:
+                            st.session_state.initial_response_thread.append(
+                                {"role": "user", "content": initial_followup_question}
+                            )
+                            initial_followup_messages = (
+                                st.session_state.initial_response_thread
+                            )
+                        with st.chat_message("user"):
+                            st.markdown(initial_followup_question)
+                        with st.chat_message("assistant"):
+                            client = OpenAI()
+                            try:
+                                stream = client.chat.completions.create(
+                                    model="o3-mini",
+                                    messages=[
+                                        {"role": m["role"], "content": m["content"]}
+                                        for m in initial_followup_messages
+                                    ],
+                                    stream=True,
                                 )
-                                initial_followup_messages = (
-                                    st.session_state.thread_with_tavily_context
+                                response = st.write_stream(stream)
+                            except Exception as e:
+                                st.error(f"Error during OpenAI call: {e}")
+                                return
+                            st.session_state.initial_response_thread.append(
+                                {"role": "assistant", "content": response}
+                            )
+                    with st.expander("View full follow-up thread"):
+                        for message in st.session_state.initial_response_thread:
+                            if message["role"] != "system":
+                                emoji = role_emojis.get(message["role"], "❓")
+                                st.write(
+                                    f"{emoji} {message['role'].capitalize()}: {message['content']}"
                                 )
-                            else:
-                                st.session_state.initial_response_thread.append(
-                                    {
-                                        "role": "user",
-                                        "content": initial_followup_question,
-                                    }
-                                )
-                                initial_followup_messages = (
-                                    st.session_state.initial_response_thread
-                                )
-                            with st.chat_message("user"):
-                                st.markdown(initial_followup_question)
-
-                            with st.chat_message("assistant"):
-                                client = OpenAI()
-                                try:
-                                    stream = client.chat.completions.create(
-                                        model="gpt-4o",
-                                        messages=[
-                                            {"role": m["role"], "content": m["content"]}
-                                            for m in initial_followup_messages
-                                        ],
-                                        stream=True,
-                                    )
-
-                                    response = st.write_stream(stream)
-                                except Exception as e:
-                                    st.error(f"Error during OpenAI call: {e}")
-                                    return
-                                st.session_state.initial_response_thread.append(
-                                    {"role": "assistant", "content": response}
-                                )
-
-                        with st.expander("View full follow-up thread"):
+                    if st.session_state.initial_response_thread:
+                        if st.checkbox("Download Followup Conversation"):
+                            full_followup_conversation = ""
                             for message in st.session_state.initial_response_thread:
                                 if message["role"] != "system":
-                                    # Fetch the emoji based on the role
-                                    emoji = role_emojis.get(
-                                        message["role"], "❓"
-                                    )  # Default to ❓ if the role isn't recognized
-                                    # Display the message with the role emoji
-                                    st.write(
-                                        f"{emoji} {message['role'].capitalize()}: {message['content']}"
-                                    )
-
-                        if st.session_state.initial_response_thread != []:
-                            if st.checkbox("Download Followup Conversation"):
-                                # Initialize the conversation string
-                                full_followup_conversation = ""
-
-                                # Build the conversation string with emojis
-                                for message in st.session_state.initial_response_thread:
-                                    if (
-                                        message["role"] != "system"
-                                    ):  # Skip system messages
-                                        emoji = role_emojis.get(
-                                            message["role"], "❓"
-                                        )  # Default emoji for unrecognized roles
-                                        full_followup_conversation += f"{emoji} {message['role'].capitalize()}: {message['content']}\n\n"
-
-                                # Convert the conversation to HTML using markdown2
-                                html = markdown2.markdown(
-                                    full_followup_conversation, extras=["tables"]
-                                )
-
-                                # Provide a download button for the conversation
-                                st.download_button(
-                                    "Download Followup Conversation",
-                                    html,
-                                    "followup_conversation.html",
-                                    "text/html",
-                                )
-
-                if initial_followup == False:
+                                    emoji = role_emojis.get(message["role"], "❓")
+                                    full_followup_conversation += f"{emoji} {message['role'].capitalize()}: {message['content']}\n\n"
+                            html = markdown2.markdown(
+                                full_followup_conversation, extras=["tables"]
+                            )
+                            st.download_button(
+                                "Download Followup Conversation",
+                                html,
+                                "followup_conversation.html",
+                                "text/html",
+                            )
+                if not initial_followup:
                     if st.button("Ask 3 AI Expert Personas for Opinions"):
-                        prelim_response = (
-                            st.session_state.rag_response
-                            + st.session_state.source_chunks
+                        prelim_response = st.session_state.full_initial_response + str(
+                            st.session_state.citations
                         )
-
                         try:
                             completion = create_chat_completion(
                                 messages=find_experts_messages,
@@ -1747,20 +2086,11 @@ def main():
                         except Exception as e:
                             st.error(f"Error during OpenAI call: {e}")
                             return
-
-                        # st.write(f"**Response:**")
                         json_output = completion.choices[0].message.content
-                        # st.write(json_output)
                         experts, domains, expert_questions = extract_expert_info(
                             json_output
                         )
                         st.session_state.experts = experts
-                        # for expert in st.session_state.experts:
-                        #     st.write(f"**{expert}**")
-                        # st.write(f"**Experts:** {st.session_state.experts}")
-                        # st.write(f"**Domains:** {domains}")
-                        # st.write(f"**Expert Questions:** {expert_questions}")
-
                         updated_expert1_system_prompt = expert1_system_prompt.format(
                             expert=experts[0], domain=domains[0]
                         )
@@ -1773,12 +2103,10 @@ def main():
                         updated_question1 = expert_questions[0]
                         updated_question2 = expert_questions[1]
                         updated_question3 = expert_questions[2]
-
                         prelim_response = (
                             st.session_state.rag_response
                             + st.session_state.source_chunks
                         )
-
                         expert1_messages = [
                             {
                                 "role": "system",
@@ -1818,7 +2146,6 @@ def main():
                             },
                         ]
                         st.session_state.messages3 = expert3_messages
-
                         with st.spinner("Waiting for experts to respond..."):
                             st.session_state.expert_answers = asyncio.run(
                                 get_responses(
@@ -1829,29 +2156,18 @@ def main():
                                     ]
                                 )
                             )
-
-        # if st.session_state.snippets:
-        #     with st.sidebar:
-        #         st.divider()
-        #         st.info("Current Results")
-        #         with st.expander("View Links from Internet Search"):
-        #             for snippet in st.session_state.snippets:
-        #                 snippet = snippet.replace('<END OF SITE>', '')
-        #                 st.markdown(snippet)
         with col1:
-            if first_view == False:
+            if not first_view:
                 try:
                     if (
                         st.session_state.pubmed_search_terms
-                        and st.session_state.articles != []
+                        and st.session_state.articles
                     ):
                         with st.expander("View PubMed Results Added to Knowledge Base"):
                             pubmed_link = (
                                 "https://pubmed.ncbi.nlm.nih.gov/?term="
                                 + st.session_state.pubmed_search_terms
                             )
-                            # st.write("[View PubMed Search Results]({pubmed_link})")
-                            # st.page_link(pubmed_link, label="Click here to view in PubMed", icon="📚")
                             st.page_link(
                                 pubmed_link,
                                 label="Click here to view in PubMed",
@@ -1866,132 +2182,116 @@ def main():
                                     f"### [{article['title']}]({article['link']})"
                                 )
                                 st.write(f"Year: {article['year']}")
-                                if article["abstract"]:
-                                    st.write(article["abstract"])
-                                else:
-                                    st.write("No abstract available")
+                                st.write(
+                                    article["abstract"]
+                                    if article["abstract"]
+                                    else "No abstract available"
+                                )
                 except:
                     st.write(
-                        "No PubMed articles to display - if topic works, API may be down!"
+                        "No Relevant PubMed articles to display - if topic works, API may be down!"
                     )
-
+                    pubmed_link = (
+                        "https://pubmed.ncbi.nlm.nih.gov/?term="
+                        + st.session_state.pubmed_search_terms
+                    )
+                    st.page_link(
+                        pubmed_link, label="Click here to try in PubMed", icon="📚"
+                    )
+                    with st.popover("PubMed Search Terms"):
+                        st.write(
+                            f"**Search Strategy:** {st.session_state.pubmed_search_terms}"
+                        )
                 with st.expander("View Internet Results Added to Knowledge Base"):
-                    # if st.session_state.chosen_domain != "medical":
-                    #     st.write(f'Domains used: {st.session_state.chosen_domain}')
                     for snippet in st.session_state.snippets:
-                        snippet = snippet.replace("<END OF SITE>", "")
-                        st.markdown(snippet)
-                if st.session_state.rag_response:
-                    st.info("Initial Answer")
-                    container1 = st.container(border=True)
+                        st.markdown(snippet.replace("<END OF SITE>", ""))
+                if st.session_state.full_initial_response:
+                    # st.info(f"Response as of **{current_datetime}:**\n\n")
+                    container1 = st.container()
                     with container1:
-                        st.markdown(st.session_state.rag_response)
+                        st.info(f"Response as of **{current_datetime}:**\n\n")
+                        st.markdown(st.session_state.full_initial_response)
+                        if st.session_state.citations:
+                            display_url_list(st.session_state.citations)
+                            with st.expander("View Source Excerpts"):
+                                display_citations(st.session_state.citations)
+                        if st.session_state.tavily_initial_response:
+                            st.markdown(st.session_state.tavily_urls)
+                            with st.expander("Retrieved Search Content"):
+                                # st.write(f'Updated Query: {updated_initial_tavily_query.choices[0].message.content}')
+                                # st.write("\n\n")
+                                st.write(st.session_state.tavily_initial_response)
                         if st.button("Create Word File"):
-                            doc = markdown_to_word(st.session_state.rag_response)
+                            doc = markdown_to_word(
+                                st.session_state.full_initial_response
+                            )
                             buffer = BytesIO()
                             doc.save(buffer)
                             buffer.seek(0)
-
                             st.download_button(
                                 label="Download Word File",
                                 data=buffer,
                                 file_name="prelim_response.docx",
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                             )
-                        with st.expander("View Source Excerpts"):
-                            st.markdown(st.session_state.source_chunks)
-
-        # st.write(f' here is the domain: {st.session_state.chosen_domain}')
+                        # with st.expander("View Source Excerpts"):
+                        #     st.markdown(st.session_state.source_chunks)
         with col2:
             if st.session_state.expert_answers:
-                # st.divider()
-                container2 = st.container(border=True)
+                container2 = st.container()
                 with container2:
                     st.info("AI Expert Persona Responses")
                     with st.expander(f"AI {st.session_state.experts[0]} Perspective"):
                         expert_0 = st.session_state.expert_answers[0]["choices"][0][
                             "message"
                         ]["content"]
-                        st.write(
-                            st.session_state.expert_answers[0]["choices"][0]["message"][
-                                "content"
-                            ]
-                        )
+                        st.write(expert_0)
                         st.session_state.messages1.append(
-                            {
-                                "role": "assistant",
-                                "content": st.session_state.expert_answers[0][
-                                    "choices"
-                                ][0]["message"]["content"],
-                            }
+                            {"role": "assistant", "content": expert_0}
                         )
                         if st.button("Create Word File for AI Expert 1"):
                             doc = markdown_to_word(expert_0)
                             buffer = BytesIO()
                             doc.save(buffer)
                             buffer.seek(0)
-
                             st.download_button(
                                 label="Download Word File for AI Expert 1",
                                 data=buffer,
                                 file_name="AI_expert_1.docx",
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                             )
-                        # with st.expander("View Source Excerpts"):
-                        #     st.markdown(st.session_state.source_chunks)
                     with st.expander(f"AI {st.session_state.experts[1]} Perspective"):
                         expert_1 = st.session_state.expert_answers[1]["choices"][0][
                             "message"
                         ]["content"]
-                        st.write(
-                            st.session_state.expert_answers[1]["choices"][0]["message"][
-                                "content"
-                            ]
-                        )
+                        st.write(expert_1)
                         st.session_state.messages2.append(
-                            {
-                                "role": "assistant",
-                                "content": st.session_state.expert_answers[1][
-                                    "choices"
-                                ][0]["message"]["content"],
-                            }
+                            {"role": "assistant", "content": expert_1}
                         )
                         if st.button("Create Word File for AI Expert 2"):
                             doc = markdown_to_word(expert_1)
                             buffer = BytesIO()
                             doc.save(buffer)
                             buffer.seek(0)
-
                             st.download_button(
                                 label="Download Word File for AI Expert 2",
                                 data=buffer,
                                 file_name="AI_expert_2.docx",
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                             )
-
                     with st.expander(f"AI {st.session_state.experts[2]} Perspective"):
                         expert_2 = st.session_state.expert_answers[2]["choices"][0][
                             "message"
                         ]["content"]
-                        st.write(
-                            st.session_state.expert_answers[2]["choices"][0]["message"][
-                                "content"
-                            ]
-                        )
+                        st.write(expert_2)
                         st.session_state.messages3.append(
-                            {
-                                "role": "assistant",
-                                "content": st.session_state.expert_answers[2][
-                                    "choices"
-                                ][0]["message"]["content"],
-                            }
+                            {"role": "assistant", "content": expert_2}
                         )
                         if st.button("Create Word File for AI Expert 3"):
                             doc = markdown_to_word(expert_2)
                             buffer = BytesIO()
                             doc.save(buffer)
                             buffer.seek(0)
-
                             st.download_button(
                                 label="Download Word File for AI Expert 3",
                                 data=buffer,
@@ -1999,128 +2299,9 @@ def main():
                                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                             )
 
-            # if st.session_state.rag_response:
-            #     with st.sidebar:
 
-            #         with st.expander("Web Response and Sources"):
-            #             st.write(st.session_state.rag_response)
-            #             st.write(st.session_state.source_chunks)
-
-            if st.session_state.messages1:
-                if st.checkbox(
-                    "Ask an AI Persona a Followup Question - (Start over at the top if current Internet content is needed.)"
-                ):
-                    expert_chosen = st.selectbox(
-                        "Choose an expert to ask a followup question:",
-                        st.session_state.experts,
-                    )
-                    experts = st.session_state.experts
-                    if experts:
-                        if expert_chosen == experts[0]:
-                            st.session_state.followup_messages = (
-                                st.session_state.messages1
-                            )
-                            st.session_state.expert_number = 1
-
-                        elif expert_chosen == experts[1]:
-                            st.session_state.followup_messages = (
-                                st.session_state.messages2
-                            )
-                            st.session_state.expert_number = 2
-
-                        elif expert_chosen == experts[2]:
-                            st.session_state.followup_messages = (
-                                st.session_state.messages3
-                            )
-                            st.session_state.expert_number = 3
-
-                    if prompt := st.chat_input("Ask followup!"):
-                        st.session_state.followup_messages.append(
-                            {"role": "user", "content": prompt}
-                        )
-                        st.session_state.final_thread.append(
-                            {"role": "user", "content": prompt}
-                        )
-                        with st.chat_message("user"):
-                            st.markdown(prompt)
-
-                        with st.chat_message("assistant"):
-                            client = OpenAI()
-                            try:
-                                stream = client.chat.completions.create(
-                                    model="gpt-4o",
-                                    messages=[
-                                        {"role": m["role"], "content": m["content"]}
-                                        for m in st.session_state.followup_messages
-                                    ],
-                                    stream=True,
-                                )
-                                st.write(
-                                    experts[st.session_state.expert_number - 1] + ": "
-                                )
-                                response = st.write_stream(stream)
-                            except Exception as e:
-                                st.error(f"Error during OpenAI call: {e}")
-                                return
-                            st.session_state.followup_messages.append(
-                                {
-                                    "role": "assistant",
-                                    "content": f"{experts[st.session_state.expert_number - 1]}: {response}",
-                                }
-                            )
-                            st.session_state.final_thread.append(
-                                {
-                                    "role": "assistant",
-                                    "content": f"{experts[st.session_state.expert_number - 1]}: {response}",
-                                }
-                            )
-
-                    if st.session_state.final_thread != []:
-                        if st.checkbox("Download Followup Responses"):
-                            full_conversation = ""
-
-                            for message in st.session_state.final_thread:
-                                if message["role"] != "system":
-                                    full_conversation += (
-                                        f"{message['role']}: {message['content']}\n\n"
-                                    )
-
-                            html = markdown2.markdown(
-                                full_conversation, extras=["tables"]
-                            )
-                            st.download_button(
-                                "Download Followup Responses",
-                                html,
-                                "followup_responses.html",
-                                "text/html",
-                            )
-
-                            # if st.button("Create Word File for followup conversation"):
-                            #     doc = markdown_to_word(st.session_state.final_thread)
-                            #     buffer = BytesIO()
-                            #     doc.save(buffer)
-                            #     buffer.seek(0)
-
-                            #     st.download_button(
-                            #         label="Download Word File for followup conversation",
-                            #         data=buffer,
-                            #         file_name="followup_convo.docx",
-                            #         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                            #                 )
-
-        if st.session_state.final_thread != []:
-            with col2:
-                with st.expander("Followup Conversation"):
-                    list_followup = ""
-                    # replace_first_user_message(st.session_state.followup_messages, {"role": "user", "content": st.session_state.original_question})
-                    for message in st.session_state.final_thread:
-                        if message["role"] != "system":
-                            list_followup += (
-                                f"{message['role']}: {message['content']}\n\n"
-                            )
-                    list_followup = list_followup.replace("assistant:", "")
-                    st.markdown(list_followup)
-
-
+#########################################
+# Main Program Entry Point
+#########################################
 if __name__ == "__main__":
     main()
