@@ -1799,13 +1799,11 @@ def main():
         with col2:
             if st.session_state.rag_response or st.session_state.full_initial_response:
                 # RAGAS Model Settings
-                hallucination_check=st.checkbox("Check for Hallucinations in Section 1")
+                
+                hallucination_check=st.button("Validate Response against Sources")
                 if hallucination_check:
                     #### Ragas Scoring
-                    test_data ={
-                        "user_input": f'{st.session_state.original_question} and sources: {st.session_state.citations}',
-                        "response": st.session_state.full_initial_response,
-                    }
+
                     pattern = r"^.*2\. Additional Insights from the Model's Knowledge.*$"
                     # Split at the first line MATCHING the plain text phrase (robust to markdown)
                     split_content = re.split(pattern, st.session_state.full_initial_response, maxsplit=1, flags=re.MULTILINE)
@@ -1815,17 +1813,12 @@ def main():
                         reference=str(st.session_state.citations),
                         )
 
-                    hallucinations_binary = AspectCritic(
-                        name="hallucinations_binary",
-                        definition="Did the model hallucinate or add any information that was not present in the retrieved context?",
-                        llm=evaluator_llm,
-                    )
                     rubrics = {
-                        "score1_description": "There is no hallucination in the response. All the information in the response is present in the retrieved context.",
-                        "score2_description": "There are no factual statements that are not present in the retrieved context but the response is not fully accurate and lacks important details.",
-                        "score3_description": "There are many factual statements that are not present in the retrieved context.",
-                        "score4_description": "The response contains some factual errors and lacks important details.",
-                        "score5_description": "The model adds new information and statements that contradict the retrieved context.",
+                        "score1_description": "There is no hallucination in the response. The response is fully supported by the reference.",
+                        "score2_description": "Factual statements are supported by the reference but the response is not fully accurate and lacks important details.",
+                        "score3_description": "There are some factual statements that are not present in the reference.",
+                        "score4_description": "The response contains some factual errors and lacks important details based on the reference.",
+                        "score5_description": "The model adds new information and statements that contradict the reference.",
                     }
                     scorer = RubricsScore(rubrics=rubrics, llm=evaluator_llm)
                     # await scorer.single_turn_ascore(sample)
@@ -1842,17 +1835,18 @@ def main():
                     score = asyncio.run(evaluate())
                     # st.write("Summary Accuracy Score:", score)
                     if score == 1:
-                        st.success("There is no hallucination in Section 1 of the response. All the information in the response is present in the sources.")
+                        st.success("Section 1 is fully supported by the sources.")
                     elif score == 2:
-                        st.error("Caution: There are no factual statements that are not present in the sources but the Section 1 response is not fully accurate and lacks important details.")
+                        st.error("Caution: Factual statements are supported by the sources but the Section 1 response is not fully accurate and lacks important details. Confirm with references directly.")
                     elif score == 3:
-                        st.warning("Caution: There are many factual statements in Section 1 that are not present in the sources.")
+                        st.warning("Caution: Some factual statements in Section 1 are not fully supported by the sources. Confirm with references directly.")
                     elif score == 4:
-                        st.warning("Warning: Section 1 of the response contains some factual errors and lacks important details.")
+                        st.warning("Warning: Section 1 of the response contains some factual errors and lacks important details. Confirm with references directly.")
                     elif score == 5:
-                        st.error("Warning!!! The model adds new information and statements to Section 1 that contradict the sources.")
+                        st.error("Warning!!! The model adds new information and statements to Section 1 that contradict the sources. Confirm with references directly.")
                     else:
                         st.error("Error: Unable to evaluate the response.")
+                
                 #     st.session_state.ragas_score = score
                 # if st.session_state.full_initial_response:
                 #     st.sidebar.write(f'**Score (1 or 0) if Section 1 is faithful to Sources:** {st.session_state.ragas_score}')
