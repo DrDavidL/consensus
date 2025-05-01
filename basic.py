@@ -592,8 +592,30 @@ def display_citations(citations):
 
 
 
-# Convert Markdown text to a Word document
-def markdown_to_word(markdown_text):
+# Helper to format a single citation as a professional reference (AMA-like)
+def format_citation(citation, idx=None):
+    # Try to use available fields for best formatting
+    # Accepts dicts with keys: title, url, year, abstract, id, etc.
+    title = citation.get("title") or citation.get("context") or ""
+    url = citation.get("url") or citation.get("link") or ""
+    year = citation.get("year", "")
+    # Try to extract PMID/DOI if present
+    pmid = citation.get("id", "")
+    # Compose a simple professional citation
+    citation_str = f"{title}"
+    if year:
+        citation_str += f". {year}."
+    if url:
+        citation_str += f" {url}"
+    if pmid:
+        citation_str += f" PMID: {pmid}."
+    # Numbered if idx is provided
+    if idx is not None:
+        citation_str = f"{idx}. {citation_str}"
+    return citation_str.strip()
+
+# Convert Markdown text to a Word document, with optional citations at the end
+def markdown_to_word(markdown_text, citations=None):
     doc = Document()
     # Add the user question at the top of the document if available
     if st.session_state.get("original_question"):
@@ -630,6 +652,14 @@ def markdown_to_word(markdown_text):
                     run.italic = True
                 else:
                     p.add_run(seg)
+    # Add citations at the end if provided and non-empty
+    if citations and isinstance(citations, list) and len(citations) > 0:
+        doc.add_page_break()
+        doc.add_heading("References", level=2)
+        for idx, citation in enumerate(citations, 1):
+            # Try to use professional formatting
+            citation_str = format_citation(citation, idx)
+            doc.add_paragraph(citation_str, style="List Number")
     return doc
 
 
@@ -1682,7 +1712,10 @@ def main():
                         #     st.markdown(f'Citations: {st.session_state.citations}')
                         #     st.markdown(st.session_state.source_chunks)
                         if st.button("Create Word Document"):
-                            doc = markdown_to_word(st.session_state.rag_response)
+                            doc = markdown_to_word(
+                                st.session_state.rag_response,
+                                citations=st.session_state.citations if st.session_state.citations else None,
+                            )
                             buffer = BytesIO()
                             doc.save(buffer)
                             buffer.seek(0)
@@ -1786,7 +1819,8 @@ def main():
                         st.markdown(st.session_state.tavily_urls)
                         if st.button("Create Word Document for Quick Search"):
                             doc = markdown_to_word(
-                                st.session_state.full_initial_response
+                                st.session_state.full_initial_response,
+                                citations=st.session_state.citations if st.session_state.citations else None,
                             )
                             buffer = BytesIO()
                             doc.save(buffer)
@@ -2167,7 +2201,8 @@ def main():
                                 st.write(st.session_state.tavily_initial_response)
                         if st.button("Create Word File"):
                             doc = markdown_to_word(
-                                st.session_state.full_initial_response
+                                st.session_state.full_initial_response,
+                                citations=st.session_state.citations if st.session_state.citations else None,
                             )
                             buffer = BytesIO()
                             doc.save(buffer)
@@ -2194,7 +2229,10 @@ def main():
                             {"role": "assistant", "content": expert_0}
                         )
                         if st.button("Create Word File for AI Expert 1"):
-                            doc = markdown_to_word(expert_0)
+                            doc = markdown_to_word(
+                                expert_0,
+                                citations=st.session_state.citations if st.session_state.citations else None,
+                            )
                             buffer = BytesIO()
                             doc.save(buffer)
                             buffer.seek(0)
@@ -2213,7 +2251,10 @@ def main():
                             {"role": "assistant", "content": expert_1}
                         )
                         if st.button("Create Word File for AI Expert 2"):
-                            doc = markdown_to_word(expert_1)
+                            doc = markdown_to_word(
+                                expert_1,
+                                citations=st.session_state.citations if st.session_state.citations else None,
+                            )
                             buffer = BytesIO()
                             doc.save(buffer)
                             buffer.seek(0)
@@ -2232,7 +2273,10 @@ def main():
                             {"role": "assistant", "content": expert_2}
                         )
                         if st.button("Create Word File for AI Expert 3"):
-                            doc = markdown_to_word(expert_2)
+                            doc = markdown_to_word(
+                                expert_2,
+                                citations=st.session_state.citations if st.session_state.citations else None,
+                            )
                             buffer = BytesIO()
                             doc.save(buffer)
                             buffer.seek(0)
