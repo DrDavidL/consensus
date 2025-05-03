@@ -51,7 +51,7 @@ from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
-evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4o"))
+evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4.1"))
 evaluator_embeddings = LangchainEmbeddingsWrapper(OpenAIEmbeddings())
 
 #########################################
@@ -222,12 +222,12 @@ with st.sidebar:
         )
         # Toggle for subject area model
         topic_model_choice = st.toggle(
-            "Subject Area: Use GPT-4o",
-            help="Toggle to use GPT-4o model for determining if medical; otherwise, 4o-mini.",
+            "Subject Area: Use GPT-4.1",
+            help="Toggle to use GPT-4.1 model for determining if medical; otherwise, 4o-mini.",
         )
         if topic_model_choice:
-            st.write("GPT-4o model selected.")
-            topic_model = "gpt-4o"
+            st.write("GPT-4.1 model selected.")
+            topic_model = "gpt-4.1"
         else:
             st.write("GPT-4o-mini model selected.")
             topic_model = "gpt-4o-mini"
@@ -321,16 +321,16 @@ with st.sidebar:
         # )
 
         # RAG model options
-        rag_model_choice = "GPT-4o"
+        rag_model_choice = "GPT-4.1"
         # rag_model_choice = st.radio(
         #     "RAG Model Options",
         #     ["GPT-4o-mini", "GPT-4o", "Claude-3.5 Sonnet", "Gemini-2"],
         #     index=1,
         #     help="Select the RAG model to use for the AI responses.",
         # )   
-        if rag_model_choice == "GPT-4o":
+        if rag_model_choice == "GPT-4.1":
             # st.write("GPT-4o model selected.")
-            rag_model = "gpt-4o"
+            rag_model = "gpt-4.1"
             rag_provider = "openai"
             rag_key = api_key
         elif rag_model_choice == "Gemini-2":
@@ -353,45 +353,66 @@ with st.sidebar:
         # Second review model options
         second_review_model = st.radio(
             "Content Augmented Model Options",
-            ["GPT-4o-mini", "GPT-4o", "o3-mini", "Claude-3.7 Sonnet", "Gemini-2"],
+            ["GPT-4o-mini", "GPT-4o", "GPT-4.1", "o3-mini", "Claude-3.7 Sonnet", "Gemini-2"],
             index=2,
             help="Select the RAG model to use for the AI responses.",
         )
-        if second_review_model == "GPT-4o":
-            st.write("GPT-4o model selected.")
-            second_model = "gpt-4o"
-            second_provider = "openai"
-            second_key = api_key
-        elif second_review_model == "Claude-3.7 Sonnet":
-            st.write("Claude-3-7-sonnet model selected.")
-            second_model = "claude-3-7-sonnet-20250219"
-            second_provider = "anthropic"
-            second_key = api_key_anthropic
-        elif second_review_model == "GPT-4o-mini":
-            st.write("GPT-4o-mini model selected.")
-            second_model = "gpt-4o-mini"
-            second_provider = "openai"
-            second_key = api_key
-        elif second_review_model == "Gemini-2":
-            st.write("Gemini-2 flash model selected.")
-            second_model = "gemini-2.0-flash"
-            second_provider = "google"
-            second_key = st.secrets["GOOGLE_API_KEY"]
-        elif second_review_model == "o3-mini":
-            st.write("o3-mini reasoning model selected.")
-            second_model = "o3-mini"
-            second_provider = "openai"
-            second_key = api_key
+        model_map = {
+            "GPT-4o": {
+                "message": "GPT-4o model selected.",
+                "model": "gpt-4o",
+                "provider": "openai",
+                "key": api_key
+            },
+            "GPT-4.1": {
+                "message": "GPT-4.1 model selected.",
+                "model": "gpt-4.1",  
+                "provider": "openai",
+                "key": api_key
+            },
+            "Claude-3.7 Sonnet": {
+                "message": "Claude-3-7-sonnet model selected.",
+                "model": "claude-3-7-sonnet-20250219",
+                "provider": "anthropic",
+                "key": api_key_anthropic
+            },
+            "GPT-4o-mini": {
+                "message": "GPT-4o-mini model selected.",
+                "model": "gpt-4o-mini",
+                "provider": "openai",
+                "key": api_key
+            },
+            "Gemini-2": {
+                "message": "Gemini-2 flash model selected.",
+                "model": "gemini-2.0-flash",
+                "provider": "google",
+                "key": st.secrets["GOOGLE_API_KEY"]
+            },
+            "o3-mini": {
+                "message": "o3-mini reasoning model selected.",
+                "model": "o3-mini",
+                "provider": "openai",
+                "key": api_key
+            }
+        }
+
+        if second_review_model in model_map:
+            config = model_map[second_review_model]
+            st.write(config["message"])
+            second_model = config["model"]
+            second_provider = config["provider"]
+            second_key = config["key"]
+
         st.divider()
 
         # Expert personas model choice
         experts_model_choice = st.toggle(
-            "3 AI Experts Model: Use GPT-4o",
-            help="Toggle to use GPT-4o model for expert responses; otherwise, o3-mini with reasoning.",
+            "3 AI Experts Model: Use GPT-4.1",
+            help="Toggle to use GPT-4.1 model for expert responses; otherwise, o3-mini with reasoning.",
         )
         if experts_model_choice:
-            st.write("GPT-4o model selected.")
-            experts_model = "gpt-4o"
+            st.write("GPT-4.1 model selected.")
+            experts_model = "gpt-4.1"
         else:
             st.write("o3-mini reasoning model selected.")
             experts_model = "o3-mini"
@@ -1013,7 +1034,7 @@ def extract_expert_info(json_input):
 def create_chat_completion(
     messages,
     google=False,
-    model="gpt-4o",
+    model="gpt-4.1",
     frequency_penalty=0,
     logit_bias=None,
     logprobs=False,
