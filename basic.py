@@ -353,8 +353,8 @@ with st.sidebar:
         # Second review model options
         second_review_model = st.radio(
             "Content Augmented Model Options",
-            ["GPT-4o-mini", "GPT-4o", "GPT-4.1", "o3-mini", "Claude-3.7 Sonnet", "Gemini-2"],
-            index=2,
+            ["GPT-4o-mini", "GPT-4o", "GPT-4.1", "o3-mini", "Claude-3.7 Sonnet", "Gemini-2", "Gemini-2.5-flash", "Gemini-2.5-pro"],
+            index=6,
             help="Select the RAG model to use for the AI responses.",
         )
         model_map = {
@@ -385,6 +385,18 @@ with st.sidebar:
             "Gemini-2": {
                 "message": "Gemini-2 flash model selected.",
                 "model": "gemini-2.0-flash",
+                "provider": "google",
+                "key": st.secrets["GOOGLE_API_KEY"]
+            },
+            "Gemini-2.5-flash": {
+                "message": "Gemini-2.5 flash model selected.",
+                "model": "gemini-2.5-flash-preview-04-17",
+                "provider": "google",
+                "key": st.secrets["GOOGLE_API_KEY"]
+            },
+            "Gemini-2.5-pro": {
+                "message": "Gemini-2.5 pro model selected.",
+                "model": "gemini-2.5-pro-preview-03-25",
                 "provider": "google",
                 "key": st.secrets["GOOGLE_API_KEY"]
             },
