@@ -134,9 +134,9 @@ from prompts import (
 # Streamlit App Configuration and API Keys Setup
 #########################################
 st.set_page_config(
-    page_title="Helpful AI",
+    page_title="AI Adventure Time! 🚀",
     layout="wide",
-    page_icon=":stethoscope:",
+    page_icon="✨",
     initial_sidebar_state="expanded",
 )
 api_key = st.secrets["OPENAI_API_KEY"]
@@ -1170,7 +1170,7 @@ def check_password() -> bool:
 # Main Function: Orchestrates the App UI and Workflow
 #########################################
 def main():
-    st.title("Helpful Answers with AI!")
+    st.title("🔍 Helpful Answers with AI! ✨")
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db_path = get_db_path()
     # query_config = BaseLlmConfig(number_documents=15, model=rag_model)
@@ -1288,7 +1288,8 @@ def main():
         col2.write(" ")
         col2.write(" ")
 
-        if col2.button("Begin Research"):
+        if col2.button("🚀 Let's Go Researching!"):
+            st.balloons()
             # Reset session variables for a new research session
             first_view = True
             st.session_state.articles = []
