@@ -2065,11 +2065,11 @@ def main():
                         return rubric_result, faithfulness_result
 
                     # direct_rubric_score_value is the direct integer score from RubricsScore
-                    # faithfulness_result_obj is the FaithfulnessResult object
-                    direct_rubric_score_value, faithfulness_result_obj = asyncio.run(evaluate())
+                    # direct_faithfulness_score_value is the direct float score from Faithfulness
+                    direct_rubric_score_value, direct_faithfulness_score_value = asyncio.run(evaluate())
                     
                     current_rubric_score = int(direct_rubric_score_value) # Ensure it's an int
-                    current_faithfulness_score = faithfulness_result_obj.score
+                    current_faithfulness_score = float(direct_faithfulness_score_value) # Ensure it's a float
 
                     # Display existing summary messages based on scores
                     if current_rubric_score == 1:
@@ -2106,20 +2106,9 @@ def main():
                         st.divider()
                         
                         st.subheader("Faithfulness Score Details")
-                        st.markdown(f"**Overall Faithfulness Score:** {faithfulness_result_obj.score:.3f}")
-                        st.markdown(f"({faithfulness_result_obj.faithful_statements} faithful statements / {faithfulness_result_obj.faithful_statements + faithfulness_result_obj.unfaithful_statements} total statements)")
-                        
-                        if faithfulness_result_obj.statement_scores:
-                            st.markdown("**Statement Breakdown:**")
-                            for i, statement_info in enumerate(faithfulness_result_obj.statement_scores):
-                                verdict_text = "Supported" if statement_info.get('verdict') == "1" or statement_info.get('verdict') == 1 else "Not Supported"
-                                st.markdown(f"**Statement {i+1}:** {statement_info.get('statement')}")
-                                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**Verdict:** {verdict_text}")
-                                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**Reason:** {statement_info.get('reason')}")
-                                if i < len(faithfulness_result_obj.statement_scores) - 1:
-                                    st.markdown("---") # Mini-divider between statements
-                        else:
-                            st.markdown("No detailed statement breakdown available for faithfulness.")
+                        st.markdown(f"**Overall Faithfulness Score:** {current_faithfulness_score:.3f}")
+                        st.markdown("The Faithfulness Score measures the factual consistency of the generated answer against the provided context. A higher score indicates better alignment.")
+                        st.markdown("*(Detailed statement breakdown is not available when the metric returns a direct score.)*")
                 
                 #     st.session_state.ragas_score = current_rubric_score # If you still need this elsewhere
                 # if st.session_state.full_initial_response:
