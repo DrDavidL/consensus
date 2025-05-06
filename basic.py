@@ -1559,8 +1559,8 @@ def main():
                         with st.spinner(
                             "Adding PubMed abstracts to the knowledge base..."
                         ):
-                            if articles:
-                                for article in articles:
+                            if st.session_state.articles:
+                                for article in st.session_state.articles:
                                     retries = 3
                                     success = False
                                     while retries > 0 and not success:
