@@ -2059,34 +2059,64 @@ def main():
                     #     st.write(f'**RAGAS Score:** {pass_or_fail}')
                         
                     async def evaluate():
-                        return await scorer.single_turn_ascore(sample), await scorer_faithfulness.single_turn_ascore(sample_faithfulness)
+                        # scorer is RubricsScore, scorer_faithfulness is Faithfulness
+                        rubric_result = await scorer.single_turn_ascore(sample)
+                        faithfulness_result = await scorer_faithfulness.single_turn_ascore(sample_faithfulness)
+                        return rubric_result, faithfulness_result
 
-
-
-                    score, score_faithfulness = asyncio.run(evaluate())
-                    # st.write("Summary Accuracy Score:", score)
-                    if score == 1:
-                        st.success("Section 1 is supported by the sources.")
-                    elif score == 2:
-                        st.error("Caution: Factual statements are supported by the sources but the Section 1 response is not fully accurate and lacks important details. Confirm with references directly.")
-                    elif score == 3:
-                        st.warning("Caution: Some factual statements in Section 1 are not fully supported by the sources. Confirm with references directly.")
-                    elif score == 4:
-                        st.warning("Warning: Section 1 of the response contains some factual errors and lacks important details. Confirm with references directly.")
-                    elif score == 5:
-                        st.error("Warning!!! The model adds new information and statements to Section 1 that contradict the sources. Confirm with references directly.")
-                    else:
-                        st.error("Error: Unable to evaluate the response.")
+                    rubric_result_obj, faithfulness_result_obj = asyncio.run(evaluate())
                     
-                    # st.info("The Faithfulness Score = Number of claims supported by the sources / Total number of claims in the response.")
-                        
-                    if score_faithfulness >0.9:
-                        st.success(f"**Faithfulness Score:** {score_faithfulness:.3f}")
-                    else:
-                        st.warning(f"**Faithfulness Score:** {score_faithfulness:.3f}. Review carefully given some unsupported assertions.")
+                    current_rubric_score = rubric_result_obj.score
+                    current_faithfulness_score = faithfulness_result_obj.score
 
+                    # Display existing summary messages based on scores
+                    if current_rubric_score == 1:
+                        st.success("Section 1 is supported by the sources (Rubric Score: 1).")
+                    elif current_rubric_score == 2:
+                        st.error("Caution: Factual statements supported, but Section 1 may lack accuracy/details (Rubric Score: 2). Confirm with references.")
+                    elif current_rubric_score == 3:
+                        st.warning("Caution: Some factual statements in Section 1 may not be fully supported (Rubric Score: 3). Confirm with references.")
+                    elif current_rubric_score == 4:
+                        st.warning("Warning: Section 1 may contain factual errors/lack details (Rubric Score: 4). Confirm with references.")
+                    elif current_rubric_score == 5:
+                        st.error("Warning!!! Section 1 may add new information contradicting sources (Rubric Score: 5). Confirm with references.")
+                    else:
+                        st.error(f"Error: Unable to evaluate the response based on rubrics (Rubric Score: {current_rubric_score}).")
+                    
+                    if current_faithfulness_score > 0.9:
+                        st.success(f"**Faithfulness Score:** {current_faithfulness_score:.3f} (High confidence in factual consistency with sources).")
+                    else:
+                        st.warning(f"**Faithfulness Score:** {current_faithfulness_score:.3f}. Review carefully, some assertions might not be fully backed by provided sources.")
+
+                    # New expander for detailed RAGAS results
+                    with st.expander("View RAGS Evaluation Details"):
+                        st.subheader("Rubric Score Details")
+                        st.markdown(f"**Overall Rubric Score:** {rubric_result_obj.score}")
+                        if rubric_result_obj.reason:
+                            st.markdown("**Reasoning:**")
+                            st.markdown(rubric_result_obj.reason)
+                        else:
+                            st.markdown("No specific reasoning provided for the rubric score.")
+                        
+                        st.divider()
+                        
+                        st.subheader("Faithfulness Score Details")
+                        st.markdown(f"**Overall Faithfulness Score:** {faithfulness_result_obj.score:.3f}")
+                        st.markdown(f"({faithfulness_result_obj.faithful_statements} faithful statements / {faithfulness_result_obj.faithful_statements + faithfulness_result_obj.unfaithful_statements} total statements)")
+                        
+                        if faithfulness_result_obj.statement_scores:
+                            st.markdown("**Statement Breakdown:**")
+                            for i, statement_info in enumerate(faithfulness_result_obj.statement_scores):
+                                verdict_text = "Supported" if statement_info.get('verdict') == "1" or statement_info.get('verdict') == 1 else "Not Supported"
+                                st.markdown(f"**Statement {i+1}:** {statement_info.get('statement')}")
+                                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**Verdict:** {verdict_text}")
+                                st.markdown(f"&nbsp;&nbsp;&nbsp;&nbsp;**Reason:** {statement_info.get('reason')}")
+                                if i < len(faithfulness_result_obj.statement_scores) - 1:
+                                    st.markdown("---") # Mini-divider between statements
+                        else:
+                            st.markdown("No detailed statement breakdown available for faithfulness.")
                 
-                #     st.session_state.ragas_score = score
+                #     st.session_state.ragas_score = current_rubric_score # If you still need this elsewhere
                 # if st.session_state.full_initial_response:
                 #     st.sidebar.write(f'**Score (1 or 0) if Section 1 is faithful to Sources:** {st.session_state.ragas_score}')
                 initial_followup = st.checkbox(
