@@ -1429,7 +1429,7 @@ def main():
         col2.write(" ")
         col2.write(" ")
 
-        if col2.button("🚀 Let's Go Researching!"):
+        if col2.button("🚀 Start Researching!"):
             # Reset session variables for a new research session
             first_view = True
             st.session_state.articles = []
