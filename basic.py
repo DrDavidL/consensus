@@ -2092,7 +2092,7 @@ def main():
                         st.warning(f"**Faithfulness Score:** {current_faithfulness_score:.3f}. Review carefully, some assertions might not be fully backed by provided sources.")
 
                     # New expander for detailed RAGAS results
-                    with st.expander("View RAGS Evaluation Details"):
+                    with st.expander("View RAGAS Evaluation Details"):
                         st.subheader("Rubric Score Details")
                         st.markdown(f"**Overall Rubric Score:** {current_rubric_score}")
                         # Derive reason from the rubrics dictionary
@@ -2106,7 +2106,27 @@ def main():
                         st.subheader("Faithfulness Score Details")
                         st.markdown(f"**Overall Faithfulness Score:** {current_faithfulness_score:.3f}")
                         st.markdown("The Faithfulness Score measures the factual consistency of the generated answer against the provided context. A higher score indicates better alignment.")
-                        st.markdown("*(Detailed statement breakdown is not available as the metric returned a direct score.)*")
+                        
+                        # Add more detailed explanation of how faithfulness is calculated
+                        st.markdown("### How Faithfulness is Calculated")
+                        st.markdown("""
+                        1. **Statement Generation**: The response is broken down into individual factual statements.
+                        2. **Statement Verification**: Each statement is checked against the retrieved context.
+                        3. **Verdict Assignment**: Each statement receives a verdict (1 if supported by context, 0 if not).
+                        4. **Score Calculation**: Final score = Number of supported statements / Total number of statements.
+                        
+                        A score closer to 1.0 means most statements in the response are directly supported by the provided sources.
+                        A lower score indicates the response contains statements not found in or contradicted by the sources.
+                        """)
+                        
+                        # Add explanation about limitations
+                        st.markdown("### Limitations")
+                        st.markdown("""
+                        - The metric evaluates factual consistency, not completeness or relevance.
+                        - Complex or nuanced statements may be difficult to verify automatically.
+                        - The evaluation depends on the quality of the statement breakdown process.
+                        - Statements that are common knowledge but not in the sources may be marked as unfaithful.
+                        """)
                 
                 #     st.session_state.ragas_score = current_rubric_score # If you still need this elsewhere
                 # if st.session_state.full_initial_response:
