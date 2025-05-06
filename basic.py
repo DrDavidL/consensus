@@ -1311,7 +1311,7 @@ def main():
         app = None
     with st.expander("About this app"):
         st.info(
-            """This app interprets a user query and retrieves content from selected internet domains (including PubMed if applicable) for an initial answer and then asks AI personas their opinions on the topic after providing them with updated content. Approaches shown to improve outputs like chain of thought, expert rephrasing, and chain of verification are applied to improve the quality of the responses and to reduce hallucination. Web sites are identified, processed and content selectively retrieved for answers using Real-Time Web Search and the EmbedChain library. The default main LLM model is o3-mini with medium reasoning from OpenAI. App author is David Liebovitz, MD"""
+            """This app interprets a user query and retrieves content from selected internet domains (including PubMed if applicable) for an initial answer and then asks AI personas their opinions on the topic after providing them with updated content. Approaches shown to improve outputs like chain of thought, expert rephrasing, and chain of verification are applied to improve the quality of the responses and to reduce hallucination. Web sites are identified, processed and content selectively retrieved for answers using Real-Time Web Search and the EmbedChain library. App author is David Liebovitz, MD"""
         )
     st.info("Please validate all guidance using the sources!")
     col1, col2 = st.columns([1, 1])
