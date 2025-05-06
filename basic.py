@@ -52,8 +52,6 @@ from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
-evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model=ragas_model))
-evaluator_embeddings = LangchainEmbeddingsWrapper(OpenAIEmbeddings())
 
 #########################################
 # EmbedChain Library Imports
@@ -2057,6 +2055,8 @@ def main():
                         "score4_description": "The response contains some factual errors and lacks important details based on the reference.",
                         "score5_description": "The model adds new information and statements that contradict the reference.",
                     }
+                    evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model=ragas_model))
+                    evaluator_embeddings = LangchainEmbeddingsWrapper(OpenAIEmbeddings())
                     scorer = RubricsScore(rubrics=rubrics, llm=evaluator_llm)
                     scorer_faithfulness = Faithfulness(llm=evaluator_llm)
                     # await scorer.single_turn_ascore(sample)
