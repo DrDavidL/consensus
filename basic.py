@@ -1593,7 +1593,7 @@ def main():
                                                 st.error(
                                                     "PubMed results did not meet relevance and recency check. Click the PubMed link to view."
                                                 )
-                        if not articles:
+                        if not st.session_state.articles:
                             st.warning(
                                 "No recent and relevant PubMed articles identified for the knowledge base."
                             )
