@@ -52,7 +52,7 @@ from ragas.llms import LangchainLLMWrapper
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_openai import ChatOpenAI
 from langchain_openai import OpenAIEmbeddings
-evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model="gpt-4.1"))
+evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model=ragas_model))
 evaluator_embeddings = LangchainEmbeddingsWrapper(OpenAIEmbeddings())
 
 #########################################
@@ -364,6 +364,14 @@ with st.sidebar:
             ["GPT-4o-mini", "GPT-4o", "GPT-4.1", "o3-mini", "Claude-3.7 Sonnet", "Gemini-2", "Gemini-2.5-flash", "Gemini-2.5-pro"],
             index=6,
             help="Select the RAG model to use for the AI responses.",
+        )
+        
+        # RAGAS evaluation model options
+        ragas_model = st.radio(
+            "RAGAS Evaluation Model",
+            ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1"],
+            index=0,
+            help="Select the model to use for RAGAS evaluation of faithfulness and hallucination detection.",
         )
         model_map = {
             "GPT-4o": {
@@ -2022,8 +2030,8 @@ def main():
         with col2:
             if st.session_state.rag_response or st.session_state.full_initial_response:
                 # RAGAS Model Settings
-                
-                hallucination_check=st.button("Validate Response Section 1 against Sources", help="The Faithfulness Score = Number of claims supported by the sources / Total number of claims in the response")
+                    
+                hallucination_check=st.button(f"Validate Response Section 1 against Sources (using {ragas_model})", help="The Faithfulness Score = Number of claims supported by the sources / Total number of claims in the response")
                 if hallucination_check:
                     #### Ragas Scoring
 
@@ -2135,7 +2143,7 @@ def main():
                             try:
                                 client = OpenAI()
                                 statements_response = client.chat.completions.create(
-                                    model="gpt-4o-mini",
+                                    model=ragas_model,
                                     messages=statements_prompt,
                                     response_format={"type": "json_object"},
                                     temperature=0.1
@@ -2174,7 +2182,7 @@ def main():
                                         
                                         client = OpenAI()
                                         verdict_response = client.chat.completions.create(
-                                            model="gpt-4o-mini",
+                                            model=ragas_model,
                                             messages=verdict_prompt,
                                             response_format={"type": "json_object"},
                                             temperature=0.1
