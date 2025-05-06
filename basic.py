@@ -134,7 +134,7 @@ from prompts import (
 # Streamlit App Configuration and API Keys Setup
 #########################################
 st.set_page_config(
-    page_title="AI Adventure Time! 🚀",
+    page_title="Research Help with AI! 🚀",
     layout="wide",
     page_icon="✨",
     initial_sidebar_state="expanded",
