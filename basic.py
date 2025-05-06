@@ -69,6 +69,11 @@ import logging
 #########################################
 # Global Variables and Logging Configuration
 #########################################
+
+# Standard timeouts for network requests
+AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=60)  # 60 seconds total for aiohttp requests
+REQUESTS_TIMEOUT = 60  # 60 seconds for requests library
+
 role_emojis = {
     "user": "👤",
     "assistant": "🤖",
@@ -802,10 +807,13 @@ async def fetch_additional_results(
         f"api_key={st.secrets['pubmed_api_key']}"
     )
     try:
-        async with session.get(url) as response:
+        async with session.get(url, timeout=AIOHTTP_TIMEOUT) as response:
             response.raise_for_status()
             data = await response.json()
-            return data["esearchresult"].get("idlist", [])
+            if "esearchresult" in data and isinstance(data["esearchresult"], dict):
+                return data["esearchresult"].get("idlist", [])
+            logger.warning(f"Unexpected data structure in fetch_additional_results: {data}")
+            return []
     except (aiohttp.ClientError, asyncio.TimeoutError) as e:
         print(f"Error fetching additional results: {e}")
         return []
@@ -821,10 +829,10 @@ async def fetch_article_details(
 ) -> Tuple[str, Dict, str]:
     async with semaphore:
         try:
-            async with session.get(details_url) as details_response:
+            async with session.get(details_url, timeout=AIOHTTP_TIMEOUT) as details_response:
                 details_response.raise_for_status()
                 details_data = await details_response.json()
-            async with session.get(abstracts_url) as abstracts_response:
+            async with session.get(abstracts_url, timeout=AIOHTTP_TIMEOUT) as abstracts_response:
                 abstracts_response.raise_for_status()
                 abstracts_data = await abstracts_response.text()
             return id, details_data, abstracts_data
@@ -860,10 +868,10 @@ async def pubmed_abstracts(
             f"api_key={st.secrets['pubmed_api_key']}"
         )
         try:
-            async with session_param.get(url) as response:
+            async with session_param.get(url, timeout=AIOHTTP_TIMEOUT) as response:
                 response.raise_for_status()
                 data = await response.json()
-                if "esearchresult" not in data or "count" not in data["esearchresult"]:
+                if not isinstance(data.get("esearchresult"), dict) or "count" not in data["esearchresult"]:
                     st.error("Unexpected response format from PubMed API (esearch)")
                     return []
                 ids = data["esearchresult"].get("idlist", [])
@@ -1011,7 +1019,7 @@ def realtime_search(query, domains, max, start_year=2020):
         "X-RapidAPI-Host": "real-time-web-search.p.rapidapi.com",
     }
     try:
-        response = requests.get(url, headers=headers, params=querystring)
+        response = requests.get(url, headers=headers, params=querystring, timeout=REQUESTS_TIMEOUT)
         response.raise_for_status()
         response_data = response.json().get("data", [])
         urls = [item.get("url") for item in response_data]
@@ -1041,7 +1049,14 @@ async def get_response(messages, model=experts_model):
                 "Content-Type": "application/json",
             },
             json=payload,
+            timeout=AIOHTTP_TIMEOUT,
         )
+        # Ensure response is properly handled if it's not JSON or an error occurred
+        if response.status != 200:
+            error_text = await response.text()
+            logger.error(f"OpenAI API error ({response.status}): {error_text}")
+            # Depending on desired behavior, could raise an exception or return a specific error structure
+            return {"error": {"message": f"API request failed with status {response.status}: {error_text}", "code": response.status}}
         return await response.json()
 
 
@@ -1094,15 +1109,30 @@ def get_db_path():
 #########################################
 # Helper Function to Extract Expert Information from JSON
 #########################################
-def extract_expert_info(json_input):
-    data = json.loads(json_input)
-    experts = []
-    domains = []
-    expert_questions = []
-    for item in data["rephrased_questions"]:
-        experts.append(item["expert"])
-        domains.append(item["domain"])
-        expert_questions.append(item["question"])
+def extract_expert_info(json_input: str) -> Tuple[List[str], List[str], List[str]]:
+    experts, domains, expert_questions = [], [], []
+    try:
+        data = json.loads(json_input)
+        if not isinstance(data, dict) or "rephrased_questions" not in data:
+            logger.warning("JSON input for extract_expert_info is missing 'rephrased_questions' key or is not a dict.")
+            return experts, domains, expert_questions
+
+        rephrased_list = data["rephrased_questions"]
+        if not isinstance(rephrased_list, list):
+            logger.warning("'rephrased_questions' is not a list in extract_expert_info.")
+            return experts, domains, expert_questions
+
+        for item in rephrased_list:
+            if isinstance(item, dict) and all(k in item for k in ["expert", "domain", "question"]):
+                experts.append(str(item["expert"]))
+                domains.append(str(item["domain"]))
+                expert_questions.append(str(item["question"]))
+            else:
+                logger.warning(f"Skipping malformed item in 'rephrased_questions': {item}")
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to decode JSON in extract_expert_info: {e}")
+    except Exception as e:
+        logger.error(f"Unexpected error in extract_expert_info: {e}")
     return experts, domains, expert_questions
 
 
@@ -1641,8 +1671,7 @@ def main():
                                         except ValueError as ve:
                                             logger.error(f"Value error: {ve}")
                                             retries -= 1
-                                        except Exception as e:
-                                            logger.error(f"Unexpected error: {e}")
+                                        # Removed the problematic general except Exception here
                                         except Exception as e:
                                             retries -= 1
                                             logger.error(
