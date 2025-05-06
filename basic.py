@@ -2126,10 +2126,10 @@ def main():
                         # In a real implementation, these would come from the RAGAS evaluation
                         with st.spinner("Analyzing statements..."):
                             statements_prompt = [
-                                {"role": "system", "content": "You are an AI assistant that breaks down text into individual factual statements. For the given text, extract 5-8 key factual claims as a JSON list of strings. Each statement should be self-contained and represent a single factual claim."},
+                                {"role": "system", "content": "You are an AI assistant that breaks down text into individual factual statements. For the given text, extract 5-8 key factual claims as a JSON list of strings. Each statement should be self-contained and represent a single factual claim. Return a JSON object with a 'statements' array. If you can't find any statements, include at least 3 general claims from the text."},
                                 {"role": "user", "content": f"Extract factual statements from this text:\n\n{section1}"}
                             ]
-                            
+                                
                             try:
                                 statements_response = create_chat_completion(
                                     statements_prompt, 
@@ -2138,46 +2138,102 @@ def main():
                                     temperature=0.1
                                 )
                                 statements_json = statements_response.choices[0].message.content
-                                statements = json.loads(statements_json).get("statements", [])
+                                    
+                                try:
+                                    parsed_json = json.loads(statements_json)
+                                    statements = parsed_json.get("statements", [])
+                                        
+                                    # Fallback if no statements were extracted
+                                    if not statements:
+                                        st.warning("No specific factual statements were identified. Using general statements from the text.")
+                                        # Create some basic statements from the text
+                                        statements = [
+                                            f"The text discusses {st.session_state.original_question}",
+                                            "The response provides information based on available sources",
+                                            "The text contains factual content related to the query"
+                                        ]
+                                except json.JSONDecodeError:
+                                    st.warning("Could not parse JSON response. Using general statements.")
+                                    statements = [
+                                        f"The text discusses {st.session_state.original_question}",
+                                        "The response provides information based on available sources",
+                                        "The text contains factual content related to the query"
+                                    ]
                                 
                                 # For each statement, determine if it's supported by the context
                                 verdicts = []
                                 for statement in statements:
-                                    verdict_prompt = [
-                                        {"role": "system", "content": "You are an AI assistant that determines if a statement is supported by the provided context. Return a JSON object with keys 'verdict' (1 if supported, 0 if not) and 'reason' (brief explanation)."},
-                                        {"role": "user", "content": f"Statement: {statement}\n\nContext: {str(st.session_state.citations)}\n\nIs this statement supported by the context? Return only a JSON object."}
-                                    ]
-                                    
-                                    verdict_response = create_chat_completion(
-                                        verdict_prompt,
-                                        model="gpt-4o-mini",
-                                        response_format="json_object",
-                                        temperature=0.1
-                                    )
-                                    
-                                    verdict_json = verdict_response.choices[0].message.content
-                                    verdict_data = json.loads(verdict_json)
-                                    verdicts.append({
-                                        "statement": statement,
-                                        "verdict": verdict_data.get("verdict", 0),
-                                        "reason": verdict_data.get("reason", "No reason provided")
-                                    })
+                                    try:
+                                        verdict_prompt = [
+                                            {"role": "system", "content": "You are an AI assistant that determines if a statement is supported by the provided context. Return a JSON object with keys 'verdict' (1 if supported, 0 if not) and 'reason' (brief explanation)."},
+                                            {"role": "user", "content": f"Statement: {statement}\n\nContext: {str(st.session_state.citations)}\n\nIs this statement supported by the context? Return only a JSON object."}
+                                        ]
+                                        
+                                        verdict_response = create_chat_completion(
+                                            verdict_prompt,
+                                            model="gpt-4o-mini",
+                                            response_format="json_object",
+                                            temperature=0.1
+                                        )
+                                        
+                                        verdict_json = verdict_response.choices[0].message.content
+                                        
+                                        try:
+                                            verdict_data = json.loads(verdict_json)
+                                            verdict = verdict_data.get("verdict", 0)
+                                            # Ensure verdict is either 0 or 1
+                                            if not isinstance(verdict, int) or verdict not in [0, 1]:
+                                                if isinstance(verdict, str) and verdict.lower() in ["true", "yes", "supported"]:
+                                                    verdict = 1
+                                                elif isinstance(verdict, str) and verdict.lower() in ["false", "no", "not supported"]:
+                                                    verdict = 0
+                                                else:
+                                                    verdict = 0
+                                                    
+                                            verdicts.append({
+                                                "statement": statement,
+                                                "verdict": verdict,
+                                                "reason": verdict_data.get("reason", "No reason provided")
+                                            })
+                                        except json.JSONDecodeError:
+                                            st.warning(f"Could not parse verdict JSON for statement: {statement[:50]}...")
+                                            verdicts.append({
+                                                "statement": statement,
+                                                "verdict": 0,
+                                                "reason": "Error processing verdict"
+                                            })
+                                    except Exception as e:
+                                        st.warning(f"Error evaluating statement: {str(e)}")
+                                        verdicts.append({
+                                            "statement": statement,
+                                            "verdict": 0,
+                                            "reason": f"Error during evaluation: {str(e)}"
+                                        })
                                 
                                 # Display statements and verdicts in a table
-                                st.markdown("The following statements were evaluated:")
-                                
-                                for i, v in enumerate(verdicts, 1):
-                                    verdict_icon = "✅" if v["verdict"] == 1 else "❌"
-                                    with st.expander(f"{verdict_icon} Statement {i}: {v['statement'][:100]}..."):
-                                        st.markdown(f"**Full statement:** {v['statement']}")
-                                        st.markdown(f"**Verdict:** {'Supported' if v['verdict'] == 1 else 'Not supported'}")
-                                        st.markdown(f"**Reason:** {v['reason']}")
-                                
-                                # Calculate and display the faithfulness score based on these verdicts
-                                supported = sum(1 for v in verdicts if v["verdict"] == 1)
-                                total = len(verdicts)
-                                calculated_score = supported / total if total > 0 else 0
-                                st.markdown(f"**Calculated score:** {calculated_score:.3f} ({supported} supported statements out of {total} total)")
+                                if verdicts:
+                                    st.markdown("The following statements were evaluated:")
+                                    
+                                    for i, v in enumerate(verdicts, 1):
+                                        verdict_icon = "✅" if v["verdict"] == 1 else "❌"
+                                        truncated_statement = v['statement'][:100] + "..." if len(v['statement']) > 100 else v['statement']
+                                        with st.expander(f"{verdict_icon} Statement {i}: {truncated_statement}"):
+                                            st.markdown(f"**Full statement:** {v['statement']}")
+                                            st.markdown(f"**Verdict:** {'Supported' if v['verdict'] == 1 else 'Not supported'}")
+                                            st.markdown(f"**Reason:** {v['reason']}")
+                                    
+                                    # Calculate and display the faithfulness score based on these verdicts
+                                    supported = sum(1 for v in verdicts if v["verdict"] == 1)
+                                    total = len(verdicts)
+                                    calculated_score = supported / total if total > 0 else 0
+                                    st.markdown(f"**Calculated score:** {calculated_score:.3f} ({supported} supported statements out of {total} total)")
+                                    
+                                    # Compare with RAGAS score
+                                    st.markdown(f"**RAGAS faithfulness score:** {current_faithfulness_score:.3f}")
+                                    if abs(calculated_score - current_faithfulness_score) > 0.2:
+                                        st.info("Note: There's a significant difference between our calculated score and the RAGAS score. This could be due to differences in statement extraction or evaluation methods.")
+                                else:
+                                    st.error("No statements were successfully evaluated. Please try again.")
                                 
                             except Exception as e:
                                 st.error(f"Error analyzing statements: {str(e)}")
