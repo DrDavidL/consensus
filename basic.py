@@ -2212,17 +2212,24 @@ def main():
                                             "reason": f"Error during evaluation: {str(e)}"
                                         })
                                 
-                                # Display statements and verdicts in a table
+                                # Display statements and verdicts in a flat list (no nested expanders)
                                 if verdicts:
                                     st.markdown("The following statements were evaluated:")
                                     
+                                    # Create a table for all statements
+                                    statement_data = []
                                     for i, v in enumerate(verdicts, 1):
                                         verdict_icon = "✅" if v["verdict"] == 1 else "❌"
-                                        truncated_statement = v['statement'][:100] + "..." if len(v['statement']) > 100 else v['statement']
-                                        with st.expander(f"{verdict_icon} Statement {i}: {truncated_statement}"):
-                                            st.markdown(f"**Full statement:** {v['statement']}")
-                                            st.markdown(f"**Verdict:** {'Supported' if v['verdict'] == 1 else 'Not supported'}")
-                                            st.markdown(f"**Reason:** {v['reason']}")
+                                        statement_data.append({
+                                            "Statement": f"{verdict_icon} {v['statement']}",
+                                            "Verdict": "Supported" if v["verdict"] == 1 else "Not supported",
+                                            "Reason": v["reason"]
+                                        })
+                                    
+                                    # Display as a DataFrame
+                                    import pandas as pd
+                                    df = pd.DataFrame(statement_data)
+                                    st.dataframe(df, use_container_width=True)
                                     
                                     # Calculate and display the faithfulness score based on these verdicts
                                     supported = sum(1 for v in verdicts if v["verdict"] == 1)
