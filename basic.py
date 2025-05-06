@@ -2064,9 +2064,11 @@ def main():
                         faithfulness_result = await scorer_faithfulness.single_turn_ascore(sample_faithfulness)
                         return rubric_result, faithfulness_result
 
-                    rubric_result_obj, faithfulness_result_obj = asyncio.run(evaluate())
+                    # direct_rubric_score_value is the direct integer score from RubricsScore
+                    # faithfulness_result_obj is the FaithfulnessResult object
+                    direct_rubric_score_value, faithfulness_result_obj = asyncio.run(evaluate())
                     
-                    current_rubric_score = rubric_result_obj.score
+                    current_rubric_score = int(direct_rubric_score_value) # Ensure it's an int
                     current_faithfulness_score = faithfulness_result_obj.score
 
                     # Display existing summary messages based on scores
@@ -2091,12 +2093,15 @@ def main():
                     # New expander for detailed RAGAS results
                     with st.expander("View RAGS Evaluation Details"):
                         st.subheader("Rubric Score Details")
-                        st.markdown(f"**Overall Rubric Score:** {rubric_result_obj.score}")
-                        if rubric_result_obj.reason:
+                        st.markdown(f"**Overall Rubric Score:** {current_rubric_score}")
+                        # Derive reason from the rubrics dictionary, which is in scope
+                        rubric_reason_key = f"score{current_rubric_score}_description"
+                        rubric_reason = rubrics.get(rubric_reason_key, "Specific reason not found for this score.")
+                        if rubric_reason: # Check if a reason was found
                             st.markdown("**Reasoning:**")
-                            st.markdown(rubric_result_obj.reason)
+                            st.markdown(rubric_reason)
                         else:
-                            st.markdown("No specific reasoning provided for the rubric score.")
+                            st.markdown("No specific reasoning available for this rubric score.")
                         
                         st.divider()
                         
