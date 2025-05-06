@@ -364,13 +364,6 @@ with st.sidebar:
             help="Select the RAG model to use for the AI responses.",
         )
         
-        # RAGAS evaluation model options
-        ragas_model = st.radio(
-            "RAGAS Evaluation Model",
-            ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1"],
-            index=0,
-            help="Select the model to use for RAGAS evaluation of faithfulness and hallucination detection.",
-        )
         model_map = {
             "GPT-4o": {
                 "message": "GPT-4o model selected.",
@@ -429,6 +422,16 @@ with st.sidebar:
             second_provider = config["provider"]
             second_key = config["key"]
 
+        st.divider()
+        
+        # RAGAS evaluation model options
+        ragas_model = st.radio(
+            "RAGAS Evaluation Model",
+            ["gpt-4o-mini", "gpt-4.1-mini", "gpt-4.1"],
+            index=0,
+            help="Select the model to use for RAGAS evaluation of faithfulness and hallucination detection.",
+        )
+        
         st.divider()
 
         # Expert personas model choice
