@@ -2073,28 +2073,29 @@ def main():
                     current_faithfulness_score = float(direct_faithfulness_score)
 
                     # Display existing summary messages based on scores
+                    st.markdown("### RAGAS Library Evaluation Results")
                     if current_rubric_score == 1:
-                        st.success("Section 1 is supported by the sources (Rubric Score: 1).")
+                        st.success("Section 1 is supported by the sources (RAGAS Rubric Score: 1).")
                     elif current_rubric_score == 2:
-                        st.error("Caution: Factual statements supported, but Section 1 may lack accuracy/details (Rubric Score: 2). Confirm with references.")
+                        st.error("Caution: Factual statements supported, but Section 1 may lack accuracy/details (RAGAS Rubric Score: 2). Confirm with references.")
                     elif current_rubric_score == 3:
-                        st.warning("Caution: Some factual statements in Section 1 may not be fully supported (Rubric Score: 3). Confirm with references.")
+                        st.warning("Caution: Some factual statements in Section 1 may not be fully supported (RAGAS Rubric Score: 3). Confirm with references.")
                     elif current_rubric_score == 4:
-                        st.warning("Warning: Section 1 may contain factual errors/lack details (Rubric Score: 4). Confirm with references.")
+                        st.warning("Warning: Section 1 may contain factual errors/lack details (RAGAS Rubric Score: 4). Confirm with references.")
                     elif current_rubric_score == 5:
-                        st.error("Warning!!! Section 1 may add new information contradicting sources (Rubric Score: 5). Confirm with references.")
+                        st.error("Warning!!! Section 1 may add new information contradicting sources (RAGAS Rubric Score: 5). Confirm with references.")
                     else:
-                        st.error(f"Error: Unable to evaluate the response based on rubrics (Rubric Score: {current_rubric_score}).")
+                        st.error(f"Error: Unable to evaluate the response based on rubrics (RAGAS Rubric Score: {current_rubric_score}).")
                     
                     if current_faithfulness_score > 0.9:
-                        st.success(f"**Faithfulness Score:** {current_faithfulness_score:.3f} (High confidence in factual consistency with sources).")
+                        st.success(f"**RAGAS Faithfulness Score:** {current_faithfulness_score:.3f} (High confidence in factual consistency with sources).")
                     else:
-                        st.warning(f"**Faithfulness Score:** {current_faithfulness_score:.3f}. Review carefully, some assertions might not be fully backed by provided sources.")
+                        st.warning(f"**RAGAS Faithfulness Score:** {current_faithfulness_score:.3f}. Review carefully, some assertions might not be fully backed by provided sources.")
 
                     # New expander for detailed RAGAS results
                     with st.expander("View RAGAS Evaluation Details"):
                         st.subheader("Rubric Score Details")
-                        st.markdown(f"**Overall Rubric Score:** {current_rubric_score}")
+                        st.markdown(f"**Overall RAGAS Rubric Score:** {current_rubric_score}")
                         # Derive reason from the rubrics dictionary
                         rubric_reason_key = f"score{current_rubric_score}_description"
                         rubric_reason = rubrics.get(rubric_reason_key, "Specific reason not found for this score.")
@@ -2104,7 +2105,7 @@ def main():
                         st.divider()
                         
                         st.subheader("Faithfulness Score Details")
-                        st.markdown(f"**Overall Faithfulness Score:** {current_faithfulness_score:.3f}")
+                        st.markdown(f"**Overall RAGAS Faithfulness Score:** {current_faithfulness_score:.3f}")
                         st.markdown("The Faithfulness Score measures the factual consistency of the generated answer against the provided context. A higher score indicates better alignment.")
                         
                         # Add more detailed explanation of how faithfulness is calculated
@@ -2120,7 +2121,8 @@ def main():
                         """)
                         
                         # Add statement breakdown and verdicts
-                        st.markdown("### Statement Breakdown")
+                        st.markdown("### Custom Statement Breakdown")
+                        st.info("This is our own implementation of statement verification, separate from the RAGAS library's internal process.")
                         
                         # Generate example statements with verdicts for demonstration
                         # In a real implementation, these would come from the RAGAS evaluation
@@ -2239,8 +2241,11 @@ def main():
                                     
                                     # Compare with RAGAS score
                                     st.markdown(f"**RAGAS faithfulness score:** {current_faithfulness_score:.3f}")
+                                    st.markdown(f"**Our calculated score:** {calculated_score:.3f}")
                                     if abs(calculated_score - current_faithfulness_score) > 0.2:
                                         st.info("Note: There's a significant difference between our calculated score and the RAGAS score. This could be due to differences in statement extraction or evaluation methods.")
+                                    else:
+                                        st.success("Our calculated score is similar to the RAGAS score, which provides additional confidence in the evaluation.")
                                 else:
                                     st.error("No statements were successfully evaluated. Please try again.")
                                 
