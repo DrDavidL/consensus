@@ -687,9 +687,23 @@ def markdown_to_word(markdown_text, citations=None):
                     run.italic = True
                 else:
                     p.add_run(seg)
-    # Add citations at the end if provided and non-empty
+    # Add a list of URLs first if citations are provided
     if citations and isinstance(citations, list) and len(citations) > 0:
-        doc.add_page_break()
+        unique_urls = sorted(list(set(c.get("url") or c.get("link") for c in citations if c.get("url") or c.get("link"))))
+        if unique_urls:
+            doc.add_page_break()
+            doc.add_heading("Source URLs", level=2)
+            for url in unique_urls:
+                p = doc.add_paragraph()
+                add_hyperlink(p, url, url) # Use URL as text for the link
+            doc.add_paragraph("") # Spacer paragraph
+
+    # Add detailed citations (references) at the end if provided and non-empty
+    if citations and isinstance(citations, list) and len(citations) > 0:
+        # Check if a page break is needed (if URLs were not added, or if we want it separate)
+        # If unique_urls was empty, the previous block didn't add a page break.
+        if not unique_urls: # Add page break only if URLs were not listed
+             doc.add_page_break()
         doc.add_heading("References", level=2)
         for idx, citation in enumerate(citations, 1):
             # Try to use professional formatting
