@@ -2055,6 +2055,7 @@ def main():
                         "score4_description": "The response contains some factual errors and lacks important details based on the reference.",
                         "score5_description": "The model adds new information and statements that contradict the reference.",
                     }
+                    # Use the same model for both RAGAS evaluation and our custom implementation
                     evaluator_llm = LangchainLLMWrapper(ChatOpenAI(model=ragas_model))
                     evaluator_embeddings = LangchainEmbeddingsWrapper(OpenAIEmbeddings())
                     scorer = RubricsScore(rubrics=rubrics, llm=evaluator_llm)
