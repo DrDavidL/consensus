@@ -1338,7 +1338,6 @@ def main():
         col2.write(" ")
 
         if col2.button("🚀 Let's Go Researching!"):
-            st.balloons()
             # Reset session variables for a new research session
             first_view = True
             st.session_state.articles = []
