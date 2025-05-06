@@ -2119,6 +2119,70 @@ def main():
                         A lower score indicates the response contains statements not found in or contradicted by the sources.
                         """)
                         
+                        # Add statement breakdown and verdicts
+                        st.markdown("### Statement Breakdown")
+                        
+                        # Generate example statements with verdicts for demonstration
+                        # In a real implementation, these would come from the RAGAS evaluation
+                        with st.spinner("Analyzing statements..."):
+                            statements_prompt = [
+                                {"role": "system", "content": "You are an AI assistant that breaks down text into individual factual statements. For the given text, extract 5-8 key factual claims as a JSON list of strings. Each statement should be self-contained and represent a single factual claim."},
+                                {"role": "user", "content": f"Extract factual statements from this text:\n\n{section1}"}
+                            ]
+                            
+                            try:
+                                statements_response = create_chat_completion(
+                                    statements_prompt, 
+                                    model="gpt-4o-mini",
+                                    response_format="json_object",
+                                    temperature=0.1
+                                )
+                                statements_json = statements_response.choices[0].message.content
+                                statements = json.loads(statements_json).get("statements", [])
+                                
+                                # For each statement, determine if it's supported by the context
+                                verdicts = []
+                                for statement in statements:
+                                    verdict_prompt = [
+                                        {"role": "system", "content": "You are an AI assistant that determines if a statement is supported by the provided context. Return a JSON object with keys 'verdict' (1 if supported, 0 if not) and 'reason' (brief explanation)."},
+                                        {"role": "user", "content": f"Statement: {statement}\n\nContext: {str(st.session_state.citations)}\n\nIs this statement supported by the context? Return only a JSON object."}
+                                    ]
+                                    
+                                    verdict_response = create_chat_completion(
+                                        verdict_prompt,
+                                        model="gpt-4o-mini",
+                                        response_format="json_object",
+                                        temperature=0.1
+                                    )
+                                    
+                                    verdict_json = verdict_response.choices[0].message.content
+                                    verdict_data = json.loads(verdict_json)
+                                    verdicts.append({
+                                        "statement": statement,
+                                        "verdict": verdict_data.get("verdict", 0),
+                                        "reason": verdict_data.get("reason", "No reason provided")
+                                    })
+                                
+                                # Display statements and verdicts in a table
+                                st.markdown("The following statements were evaluated:")
+                                
+                                for i, v in enumerate(verdicts, 1):
+                                    verdict_icon = "✅" if v["verdict"] == 1 else "❌"
+                                    with st.expander(f"{verdict_icon} Statement {i}: {v['statement'][:100]}..."):
+                                        st.markdown(f"**Full statement:** {v['statement']}")
+                                        st.markdown(f"**Verdict:** {'Supported' if v['verdict'] == 1 else 'Not supported'}")
+                                        st.markdown(f"**Reason:** {v['reason']}")
+                                
+                                # Calculate and display the faithfulness score based on these verdicts
+                                supported = sum(1 for v in verdicts if v["verdict"] == 1)
+                                total = len(verdicts)
+                                calculated_score = supported / total if total > 0 else 0
+                                st.markdown(f"**Calculated score:** {calculated_score:.3f} ({supported} supported statements out of {total} total)")
+                                
+                            except Exception as e:
+                                st.error(f"Error analyzing statements: {str(e)}")
+                                st.markdown("Unable to display statement breakdown. Please try again later.")
+                        
                         # Add explanation about limitations
                         st.markdown("### Limitations")
                         st.markdown("""
@@ -2126,6 +2190,7 @@ def main():
                         - Complex or nuanced statements may be difficult to verify automatically.
                         - The evaluation depends on the quality of the statement breakdown process.
                         - Statements that are common knowledge but not in the sources may be marked as unfaithful.
+                        - The statement extraction and verification process shown here is a demonstration and may differ from RAGAS's internal implementation.
                         """)
                 
                 #     st.session_state.ragas_score = current_rubric_score # If you still need this elsewhere
