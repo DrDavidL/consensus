@@ -29,6 +29,7 @@ from datetime import datetime, timedelta
 from typing import List, Tuple, Dict
 import xml.etree.ElementTree as ET
 from io import BytesIO
+from docx.shared import Pt
 
 #########################################
 # Third-Party Library Imports
@@ -652,63 +653,110 @@ def format_citation(citation, idx=None):
 # Convert Markdown text to a Word document, with optional citations at the end
 def markdown_to_word(markdown_text, citations=None):
     doc = Document()
+    
+    # Set default font for the document
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(11)
+
     # Add the user question at the top of the document if available
     if st.session_state.get("original_question"):
-        doc.add_heading("User Question", level=2)
-        doc.add_paragraph(st.session_state.original_question)
-        doc.add_paragraph("")  # Spacer paragraph
+        h_user_q = doc.add_heading("User Question", level=2)
+        h_user_q_run = h_user_q.runs[0]
+        h_user_q_run.font.name = 'Calibri'
+        h_user_q_run.font.size = Pt(16)
+        h_user_q_run.bold = True
+        h_user_q.paragraph_format.space_after = Pt(6)
+
+        p_user_q = doc.add_paragraph(st.session_state.original_question)
+        p_user_q.paragraph_format.space_after = Pt(6)
+        # Ensure runs in this paragraph also use the default font (Calibri 11pt)
+        for run_item in p_user_q.runs:
+            run_item.font.name = 'Calibri'
+            run_item.font.size = Pt(11)
+
     lines = markdown_text.split("\n")
     for line in lines:
         # Handle headings by counting the leading '#' characters.
         if line.startswith("#"):
             heading_level = len(line) - len(line.lstrip('#'))
             text = line[heading_level:].strip()
-            doc.add_heading(text, level=min(heading_level, 6))
+            h = doc.add_heading(text, level=min(heading_level, 6))
+            if h.runs: # Ensure there's a run to style
+                h_run = h.runs[0]
+                h_run.font.name = 'Calibri'
+                if heading_level == 1:
+                    h_run.font.size = Pt(18)
+                elif heading_level == 2:
+                    h_run.font.size = Pt(16)
+                elif heading_level == 3:
+                    h_run.font.size = Pt(14)
+                else:  # Level 4+
+                    h_run.font.size = Pt(12)
+                h_run.bold = True
+            h.paragraph_format.space_after = Pt(6)
         else:
-            # Create a paragraph and process inline markdown (e.g., bold formatting)
+            # Create a paragraph and process inline markdown
             p = doc.add_paragraph()
-            # Split the line into segments based on hyperlinks, bold '**' and italic '*' markers
+            p.paragraph_format.space_after = Pt(6)
             segments = re.split(r'(\[.*?\]\(.*?\)|\*\*.*?\*\*|\*.*?\*)', line)
             for seg in segments:
                 if seg.startswith("[") and seg.endswith(")"):
-                    # Process Markdown hyperlink [text](url)
                     match = re.match(r'\[([^]]+)\]\(([^)]+)\)', seg)
                     if match:
                         link_text = match.group(1)
                         link_url = match.group(2)
-                        add_hyperlink(p, link_url, link_text)
+                        add_hyperlink(p, link_url, link_text) # Hyperlink text will be Calibri 11pt
                     else:
-                        p.add_run(seg)
+                        run = p.add_run(seg) # Inherits Calibri 11pt
                 elif seg.startswith("**") and seg.endswith("**"):
-                    run = p.add_run(seg[2:-2])
+                    run = p.add_run(seg[2:-2]) # Inherits Calibri 11pt
                     run.bold = True
                 elif seg.startswith("*") and seg.endswith("*"):
-                    run = p.add_run(seg[1:-1])
+                    run = p.add_run(seg[1:-1]) # Inherits Calibri 11pt
                     run.italic = True
                 else:
-                    p.add_run(seg)
+                    run = p.add_run(seg) # Inherits Calibri 11pt
+
     # Add a list of URLs first if citations are provided
     if citations and isinstance(citations, list) and len(citations) > 0:
         unique_urls = sorted(list(set(c.get("url") or c.get("link") for c in citations if c.get("url") or c.get("link"))))
         if unique_urls:
             doc.add_page_break()
-            doc.add_heading("Source URLs", level=2)
-            for url in unique_urls:
-                p = doc.add_paragraph()
-                add_hyperlink(p, url, url) # Use URL as text for the link
-            doc.add_paragraph("") # Spacer paragraph
+            h_urls = doc.add_heading("Source URLs", level=2)
+            if h_urls.runs:
+                h_urls_run = h_urls.runs[0]
+                h_urls_run.font.name = 'Calibri'
+                h_urls_run.font.size = Pt(16)
+                h_urls_run.bold = True
+            h_urls.paragraph_format.space_after = Pt(6)
+
+            for url_item in unique_urls:
+                p_url = doc.add_paragraph()
+                p_url.paragraph_format.space_after = Pt(3)
+                add_hyperlink(p_url, url_item, url_item) # Hyperlink text will be Calibri 11pt
 
     # Add detailed citations (references) at the end if provided and non-empty
     if citations and isinstance(citations, list) and len(citations) > 0:
-        # Check if a page break is needed (if URLs were not added, or if we want it separate)
-        # If unique_urls was empty, the previous block didn't add a page break.
-        if not unique_urls: # Add page break only if URLs were not listed
+        if not unique_urls: # Add page break only if URLs were not listed (unique_urls might be empty)
              doc.add_page_break()
-        doc.add_heading("References", level=2)
+        
+        h_refs = doc.add_heading("References", level=2)
+        if h_refs.runs:
+            h_refs_run = h_refs.runs[0]
+            h_refs_run.font.name = 'Calibri'
+            h_refs_run.font.size = Pt(16)
+            h_refs_run.bold = True
+        h_refs.paragraph_format.space_after = Pt(6)
+
         for idx, citation in enumerate(citations, 1):
-            # Try to use professional formatting
             citation_str = format_citation(citation, idx)
-            doc.add_paragraph(citation_str, style="List Number")
+            p_ref = doc.add_paragraph(citation_str, style="List Number")
+            p_ref.paragraph_format.space_after = Pt(3)
+            for run_item in p_ref.runs:
+                run_item.font.name = 'Calibri'
+                run_item.font.size = Pt(10)
     return doc
 
 
