@@ -2131,10 +2131,11 @@ def main():
                             ]
                                 
                             try:
-                                statements_response = create_chat_completion(
-                                    statements_prompt, 
+                                client = OpenAI()
+                                statements_response = client.chat.completions.create(
                                     model="gpt-4o-mini",
-                                    response_format="json_object",
+                                    messages=statements_prompt,
+                                    response_format={"type": "json_object"},
                                     temperature=0.1
                                 )
                                 statements_json = statements_response.choices[0].message.content
@@ -2169,10 +2170,11 @@ def main():
                                             {"role": "user", "content": f"Statement: {statement}\n\nContext: {str(st.session_state.citations)}\n\nIs this statement supported by the context? Return only a JSON object."}
                                         ]
                                         
-                                        verdict_response = create_chat_completion(
-                                            verdict_prompt,
+                                        client = OpenAI()
+                                        verdict_response = client.chat.completions.create(
                                             model="gpt-4o-mini",
-                                            response_format="json_object",
+                                            messages=verdict_prompt,
+                                            response_format={"type": "json_object"},
                                             temperature=0.1
                                         )
                                         
