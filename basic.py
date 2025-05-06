@@ -194,6 +194,8 @@ if "tavily_urls" not in st.session_state:
     st.session_state.tavily_urls = ""
 if "ragas_score" not in st.session_state:
     st.session_state.ragas_score = 0.0
+if "older_pubmed_articles_alert" not in st.session_state:
+    st.session_state.older_pubmed_articles_alert = False
 
 #########################################
 # Sidebar Configuration: UI Elements & Settings
@@ -772,164 +774,167 @@ async def fetch_article_details(
 # Retrieve and filter PubMed abstracts based on search terms and relevance
 async def pubmed_abstracts(
     search_terms: str,
-    search_type: str = "all",
-    max_results: int = max_results,
-    years_back: int = years_back,
-    filter_relevance: bool = filter_relevance,
-    relevance_threshold: float = relevance_threshold,
-) -> List[Dict[str, str]]:
-    current_year = datetime.now().year
-    start_year = current_year - years_back
-    search_query = f"{search_terms}+AND+{start_year}[PDAT]:{current_year}[PDAT]"
-    url = (
-        f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?"
-        f"db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={max_results}&"
-        f"api_key={st.secrets['pubmed_api_key']}"
-    )
-    async with aiohttp.ClientSession() as session:
+    search_type: str, # Parameter kept for signature consistency, not used in query
+    max_results_param: int,
+    initial_years_back_param: int,
+    filter_relevance_param: bool,
+    relevance_threshold_param: float,
+) -> Tuple[List[Dict[str, str]], bool]:
+
+    async def _internal_search_logic(
+        session_param: aiohttp.ClientSession,
+        search_terms_for_helper: str,
+        year_start_for_helper: int,
+        year_end_for_helper: int,
+        max_results_to_fetch: int,
+        filter_relevance_for_helper: bool,
+        relevance_threshold_for_helper: float,
+        original_question_for_helper: str
+    ) -> List[Dict[str, str]]:
+        search_query = f"{search_terms_for_helper}+AND+{year_start_for_helper}[PDAT]:{year_end_for_helper}[PDAT]"
+        url = (
+            f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi?"
+            f"db=pubmed&term={search_query}&sort=relevance&retmode=json&retmax={max_results_to_fetch}&"
+            f"api_key={st.secrets['pubmed_api_key']}"
+        )
         try:
-            async with session.get(url) as response:
+            async with session_param.get(url) as response:
                 response.raise_for_status()
                 data = await response.json()
                 if "esearchresult" not in data or "count" not in data["esearchresult"]:
-                    st.error("Unexpected response format from PubMed API")
+                    st.error("Unexpected response format from PubMed API (esearch)")
                     return []
                 ids = data["esearchresult"].get("idlist", [])
-                logger.info(f"Total PubMed articles found: {len(ids)}")
+                logger.info(f"PubMed esearch for query '{search_query}' found {len(ids)} article IDs.")
                 if not ids:
-                    st.write("No results found.")
+                    # st.write("No results found for this period.") # Avoid st.write in async backend
                     return []
-            articles = []
+
+            articles_data = [] # Renamed from 'articles' to avoid confusion
             semaphore = asyncio.Semaphore(10)
             tasks = []
-            for id in ids:
+            for id_str in ids:
                 details_url = (
                     f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esummary.fcgi?"
-                    f"db=pubmed&id={id}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
+                    f"db=pubmed&id={id_str}&retmode=json&api_key={st.secrets['pubmed_api_key']}"
                 )
                 abstracts_url = (
                     f"https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?"
-                    f"db=pubmed&id={id}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
+                    f"db=pubmed&id={id_str}&retmode=xml&rettype=abstract&api_key={st.secrets['pubmed_api_key']}"
                 )
                 tasks.append(
                     fetch_article_details(
-                        session, id, details_url, abstracts_url, semaphore
+                        session_param, id_str, details_url, abstracts_url, semaphore
                     )
                 )
             results = await asyncio.gather(*tasks)
 
-            # First, build your filtered articles list as before.
-            filtered_articles = []
-            for id, details_data, abstracts_data in results:
-                if "result" in details_data and str(id) in details_data["result"]:
-                    article = details_data["result"][str(id)]
-                    year = article["pubdate"].split(" ")[0]
+            processed_articles = []
+            for id_str, details_data, abstracts_data in results:
+                if "result" in details_data and str(id_str) in details_data["result"]:
+                    article_detail = details_data["result"][str(id_str)]
+                    year = article_detail["pubdate"].split(" ")[0]
                     if year.isdigit():
-                        abstract = await extract_abstract_from_xml(abstracts_data, id)
-                        article_url = f"https://pubmed.ncbi.nlm.nih.gov/{id}"
+                        abstract = await extract_abstract_from_xml(abstracts_data, id_str)
+                        article_url = f"https://pubmed.ncbi.nlm.nih.gov/{id_str}"
                         if abstract.strip() and abstract != "No abstract available":
-                            filtered_articles.append(
+                            processed_articles.append(
                                 {
-                                    "id": id,
-                                    "title": article["title"],
+                                    "id": id_str,
+                                    "title": article_detail["title"],
                                     "year": year,
                                     "abstract": abstract.strip(),
                                     "link": article_url,
                                 }
                             )
                         else:
-                            logger.warning(f"No valid abstract found for article ID {id}")
+                            logger.warning(f"No valid abstract found for article ID {id_str}")
+            
+            if not processed_articles:
+                return []
 
-            # If filtering by relevance is requested, build one prompt for all articles.
-            if filter_relevance:
-                # Create a string that lists each article's ID and title.
+            if filter_relevance_for_helper:
                 articles_prompt = "\n".join(
-                    [
-                        f"ID: {article['id']} - Title: {article['title']}"
-                        for article in filtered_articles
-                    ]
+                    [f"ID: {article['id']} - Title: {article['title']}" for article in processed_articles]
                 )
-
                 messages = [
-                    {
-                        "role": "system",
-                        "content": (
-                            "You are an assistant evaluating the relevance of articles to a query. "
-                            "For each article provided, return a relevance score between 0.0 and 1.0 as a JSON object mapping "
-                            "the article's ID to its score, For example return only: {'12345': 0.9, '67890': 0.7}"
-                        ),
-                    },
-                    {
-                        "role": "user",
-                        "content": (
-                            f"Query: {st.session_state.original_question}\n"
-                            f"Articles:\n{articles_prompt}\n\n"
-                            "Return a JSON object without additional charactoers."  
-                        ),
-                    },
+                    {"role": "system", "content": "You are an assistant evaluating the relevance of articles to a query. For each article provided, return a relevance score between 0.0 and 1.0 as a JSON object mapping the article's ID to its score, For example return only: {'12345': 0.9, '67890': 0.7}"},
+                    {"role": "user", "content": f"Query: {original_question_for_helper}\nArticles:\n{articles_prompt}\n\nReturn a JSON object without additional charactoers."},
                 ]
-
-                with st.spinner("Filtering PubMed articles for question relevance"):
-                    try:
-                        response = create_chat_completion(messages, model="o3-mini")
-                        # Expecting a JSON string; parse it into a dictionary.
-                        response_content = response.choices[0].message.content.strip()
-                        # st.write(f"Response content: {response_content}")
-                        logger.debug(f"Response content before parsing: {response_content}")
-                        if not response_content:
-                            logger.error("Empty response content received.")
+                # st.spinner is UI, cannot be used here. Logging is appropriate.
+                logger.info("Filtering PubMed articles for question relevance...")
+                try:
+                    response = create_chat_completion(messages, model="o3-mini")
+                    response_content = response.choices[0].message.content.strip()
+                    logger.debug(f"Relevance filtering response content: {response_content}")
+                    if not response_content:
+                        logger.error("Empty response content received from relevance filtering.")
+                        relevance_scores = {}
+                    else:
+                        try:
+                            relevance_scores = json.loads(response_content)
+                        except json.JSONDecodeError as e:
+                            logger.error(f"Error parsing JSON from relevance filtering: {e}")
                             relevance_scores = {}
-                        else:
-                            try:
-                                relevance_scores = json.loads(response_content)
-                                # st.write(f"Relevance scores: {relevance_scores}")
-                            except json.JSONDecodeError as e:
-                                logger.error(f"Error parsing JSON response: {e}")
-                                logger.debug(f"Response content: {response_content}")
-                                relevance_scores = {}
-                        logger.info(f"Total relevant articles found: {len(relevance_scores)}")
-                        # Filter articles based on the returned relevance scores.
-                        relevant_articles = [
-                            article
-                            for article in filtered_articles
-                            if float(relevance_scores.get(str(article["id"]), 0))
-                            >= relevance_threshold
-                        ]
-                        # st.write(f"Total relevant articles found: {len(relevant_articles)}")
-                    except Exception as e:
-                        logger.error(f"Error filtering articles: {e}")
-                        # In case of an error, fallback to using all filtered articles.
-                        relevant_articles = filtered_articles
-
-                articles = [
-                    {
-                        "id": a["id"],
-                        "title": a["title"],
-                        "link": a["link"],
-                        "year": a["year"],
-                        "abstract": a["abstract"],
-                    }
-                    for a in relevant_articles
-                ]
-            else:
-                articles = [
-                    {
-                        "id": a["id"],
-                        "title": a["title"],
-                        "link": a["link"],
-                        "year": a["year"],
-                        "abstract": a["abstract"],
-                    }
-                    for a in filtered_articles
-                ]
-
-            # Ensure you return only up to max_results
-            logger.info(f"Total articles added to the database: {len(articles[:max_results])}")
-            return articles[:max_results]
+                    
+                    final_filtered_articles = [
+                        article for article in processed_articles
+                        if float(relevance_scores.get(str(article["id"]), 0)) >= relevance_threshold_for_helper
+                    ]
+                    logger.info(f"Found {len(final_filtered_articles)} relevant articles after filtering.")
+                    return final_filtered_articles
+                except Exception as e:
+                    logger.error(f"Error during relevance filtering: {e}")
+                    return processed_articles # Fallback to unfiltered if error
+            else: # No relevance filtering
+                return processed_articles
 
         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-            print(f"Error fetching PubMed articles: {e}")
+            logger.error(f"Error fetching PubMed articles for query '{search_query}': {e}")
+            # print(f"Error fetching PubMed articles: {e}") # Avoid print in async backend
             return []
+
+    # --- Main logic for pubmed_abstracts ---
+    final_articles_to_return = []
+    used_older_fallback_articles = False
+    current_year = datetime.now().year
+
+    async with aiohttp.ClientSession() as session:
+        # Initial search
+        start_year_initial = current_year - initial_years_back_param
+        logger.info(f"Performing initial PubMed search for '{search_terms}' from {start_year_initial} to {current_year} (last {initial_years_back_param} years).")
+        initial_articles_found = await _internal_search_logic(
+            session, search_terms, start_year_initial, current_year,
+            max_results_param, filter_relevance_param, relevance_threshold_param,
+            st.session_state.original_question
+        )
+
+        if initial_articles_found:
+            final_articles_to_return = initial_articles_found
+            logger.info(f"Initial PubMed search found {len(final_articles_to_return)} relevant articles.")
+        else: # Initial search found nothing
+            if initial_years_back_param < 10: # Max fallback depth is 10 years
+                logger.info(f"Initial PubMed search (last {initial_years_back_param} years) yielded no relevant articles. Extending search to 10 years.")
+                start_year_extended = current_year - 10 # Fixed 10 years
+                
+                extended_articles_found = await _internal_search_logic(
+                    session, search_terms, start_year_extended, current_year,
+                    max_results_param, filter_relevance_param, relevance_threshold_param,
+                    st.session_state.original_question
+                )
+
+                if extended_articles_found:
+                    final_articles_to_return = extended_articles_found
+                    used_older_fallback_articles = True
+                    logger.info(f"Extended PubMed search (last 10 years) found {len(final_articles_to_return)} relevant articles.")
+                else:
+                    logger.info("Extended PubMed search (last 10 years) also found no relevant articles.")
+            else: # Initial search found nothing, and initial_years_back_param was already >= 10
+                logger.info(f"Initial PubMed search (last {initial_years_back_param} years) yielded no relevant articles. Not extending further as search already covered {initial_years_back_param} years.")
+    
+    # Ensure we return only up to max_results_param
+    logger.info(f"Total articles to be added to the database: {len(final_articles_to_return[:max_results_param])}")
+    return final_articles_to_return[:max_results_param], used_older_fallback_articles
 
 
 # Real-time internet search using RapidAPI
@@ -1532,15 +1537,25 @@ def main():
                         with st.spinner(
                             f'Searching PubMed for "{pubmed_search_terms}"...'
                         ):
-                            articles = asyncio.run(
+                            articles_list, older_fetched_flag = asyncio.run(
                                 pubmed_abstracts(
-                                    pubmed_search_terms,
-                                    search_type,
-                                    max_results,
-                                    years_back,
+                                    search_terms=pubmed_search_terms,
+                                    search_type=search_type,
+                                    max_results_param=max_results,
+                                    initial_years_back_param=years_back,
+                                    filter_relevance_param=filter_relevance,
+                                    relevance_threshold_param=relevance_threshold,
                                 )
                             )
-                        st.session_state.articles = articles
+                        st.session_state.articles = articles_list
+                        st.session_state.older_pubmed_articles_alert = older_fetched_flag
+                        
+                        if st.session_state.older_pubmed_articles_alert and st.session_state.articles:
+                            st.warning(
+                                "Note: The relevant PubMed references identified are primarily older (extending up to 10 years back). "
+                                "Please use the PubMed search link to ensure no more recent articles exist."
+                            )
+
                         with st.spinner(
                             "Adding PubMed abstracts to the knowledge base..."
                         ):
@@ -1608,7 +1623,12 @@ def main():
                                         st.write(
                                             f"**Search Strategy:** {st.session_state.pubmed_search_terms}"
                                         )
-                                    for article in articles:
+                                    if st.session_state.older_pubmed_articles_alert and st.session_state.articles: # Duplicating warning here for visibility
+                                        st.warning(
+                                            "Note: The relevant PubMed references identified are primarily older (extending up to 10 years back). "
+                                            "Please use the PubMed search link to ensure no more recent articles exist."
+                                        )
+                                    for article in st.session_state.articles: # Use st.session_state.articles
                                         st.markdown(
                                             f"### [{article['title']}]({article['link']})"
                                         )
@@ -2232,6 +2252,11 @@ def main():
                             with st.popover("PubMed Search Terms"):
                                 st.write(
                                     f"**Search Strategy:** {st.session_state.pubmed_search_terms}"
+                                )
+                            if st.session_state.older_pubmed_articles_alert and st.session_state.articles:
+                                st.warning(
+                                    "Note: The relevant PubMed references identified are primarily older (extending up to 10 years back). "
+                                    "Please use the PubMed search link to ensure no more recent articles exist."
                                 )
                             for article in st.session_state.articles:
                                 st.markdown(
