@@ -1170,6 +1170,50 @@ def check_password() -> bool:
 # Main Function: Orchestrates the App UI and Workflow
 #########################################
 def main():
+    st.markdown("""
+        <style>
+            /* Base font and size */
+            html, body, [class*="st-"] {
+                font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                font-size: 1.05rem; /* Slightly larger base font */
+            }
+
+            /* Main title style */
+            h1 {
+                color: #2c3e50; /* A deep, professional blue */
+            }
+
+            /* Button styling */
+            .stButton>button {
+                border-radius: 8px;
+                padding: 10px 20px;
+                border: 1px solid #2c3e50;
+                background-color: #3498db; /* A friendly blue */
+                color: white;
+                transition: background-color 0.3s ease, box-shadow 0.3s ease;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            .stButton>button:hover {
+                background-color: #2980b9; /* Darker blue on hover */
+                box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            }
+            .stButton>button:active {
+                background-color: #1f6a9c; /* Even darker blue when active */
+            }
+
+            /* Styling for expanders to make them a bit more distinct */
+            .stExpander {
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                margin-bottom: 1rem;
+            }
+            .stExpander header {
+                background-color: #f9f9f9;
+                border-radius: 8px 8px 0 0;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     st.title("🔍 Helpful Answers with AI! ✨")
     current_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     db_path = get_db_path()
