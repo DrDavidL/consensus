@@ -2045,6 +2045,10 @@ def main():
                     split_content = re.split(pattern, st.session_state.full_initial_response, maxsplit=1, flags=re.MULTILINE)
                     section1 = split_content[0].rstrip()
                     
+                    # Initialize variables to default values
+                    current_rubric_score = 0
+                    current_faithfulness_score = 0.0
+                    
                     # Check if we've already validated this exact section1 content
                     if section1 == st.session_state.validated_section1 and st.session_state.validation_results is not None:
                         st.info("Using cached validation results since content hasn't changed.")
