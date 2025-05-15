@@ -200,6 +200,10 @@ if "ragas_score" not in st.session_state:
     st.session_state.ragas_score = 0.0
 if "older_pubmed_articles_alert" not in st.session_state:
     st.session_state.older_pubmed_articles_alert = False
+if "validated_section1" not in st.session_state:
+    st.session_state.validated_section1 = ""
+if "validation_results" not in st.session_state:
+    st.session_state.validation_results = None
 
 #########################################
 # Sidebar Configuration: UI Elements & Settings
@@ -2040,6 +2044,18 @@ def main():
                     # Split at the first line MATCHING the plain text phrase (robust to markdown)
                     split_content = re.split(pattern, st.session_state.full_initial_response, maxsplit=1, flags=re.MULTILINE)
                     section1 = split_content[0].rstrip()
+                    
+                    # Check if we've already validated this exact section1 content
+                    if section1 == st.session_state.validated_section1 and st.session_state.validation_results is not None:
+                        st.info("Using cached validation results since content hasn't changed.")
+                        # Display the cached validation results
+                        current_rubric_score = st.session_state.validation_results["rubric_score"]
+                        current_faithfulness_score = st.session_state.validation_results["faithfulness_score"]
+                        
+                        # Skip to displaying results
+                    else:
+                        # New content to validate or first validation
+                        st.session_state.validated_section1 = section1
                     sample = SingleTurnSample(
                         response=f'User question: {st.session_state.original_question} Response: {section1}',
                         reference=str(st.session_state.citations),
@@ -2078,11 +2094,22 @@ def main():
                         faithfulness_result_obj = await scorer_faithfulness._single_turn_ascore(sample_faithfulness, callbacks=[])
                         return rubric_result_obj, faithfulness_result_obj
 
-                    # evaluate_ragas_metrics returns the direct scores
-                    direct_rubric_score, direct_faithfulness_score = asyncio.run(evaluate_ragas_metrics())
-                    
-                    current_rubric_score = int(direct_rubric_score) 
-                    current_faithfulness_score = float(direct_faithfulness_score)
+                    # Only run evaluation if we don't have cached results
+                    if section1 != st.session_state.validated_section1 or st.session_state.validation_results is None:
+                        # evaluate_ragas_metrics returns the direct scores
+                        direct_rubric_score, direct_faithfulness_score = asyncio.run(evaluate_ragas_metrics())
+                        
+                        current_rubric_score = int(direct_rubric_score) 
+                        current_faithfulness_score = float(direct_faithfulness_score)
+                        
+                        # Cache the results
+                        st.session_state.validation_results = {
+                            "rubric_score": current_rubric_score,
+                            "faithfulness_score": current_faithfulness_score
+                        }
+                    else:
+                        # Use cached results (already set above in the initial check)
+                        pass
 
                     # Display existing summary messages based on scores
                     st.markdown("### RAGAS Library Evaluation Results")
