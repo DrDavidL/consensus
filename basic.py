@@ -1459,6 +1459,10 @@ def main():
             st.session_state.final_thread = []
             st.session_state.thread_with_tavily_context = []
             st.session_state.tavily_initial_response = []
+            # Clear validation-related session state variables
+            st.session_state.validated_section1 = ""
+            st.session_state.validation_results = None
+            st.session_state.current_section1 = ""
             with col1:
                 
                 if short_use_case == "Helpful PubMed Query":
