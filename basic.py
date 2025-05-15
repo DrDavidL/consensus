@@ -2162,14 +2162,45 @@ def main():
                         # Add statement breakdown and verdicts
                         st.markdown("### Custom Statement Breakdown")
                         st.info("This is our own implementation of statement verification, separate from the RAGAS library's internal process.")
-                        
-                        # Generate example statements with verdicts for demonstration
-                        # In a real implementation, these would come from the RAGAS evaluation
-                        with st.spinner("Analyzing statements..."):
-                            statements_prompt = [
-                                {"role": "system", "content": "You are an AI assistant that breaks down text into individual factual statements. For the given text, extract 5-8 key factual claims as a JSON list of strings. Each statement should be self-contained and represent a single factual claim. Return a JSON object with a 'statements' array. If you can't find any statements, include at least 3 general claims from the text."},
-                                {"role": "user", "content": f"Extract factual statements from this text:\n\n{section1}"}
-                            ]
+                                
+                        # Check if we already have cached statement analysis
+                        if (section1 == st.session_state.validated_section1 and 
+                            st.session_state.validation_results is not None and 
+                            "statement_analysis" in st.session_state.validation_results):
+                                    
+                            st.info("Using cached statement analysis since content hasn't changed.")
+                                    
+                            # Display the cached statement analysis
+                            statement_data = st.session_state.validation_results["statement_analysis"]
+                            calculated_score = st.session_state.validation_results["calculated_score"]
+                            supported = st.session_state.validation_results["supported"]
+                            total = st.session_state.validation_results["total"]
+                                    
+                            # Display as a DataFrame
+                            import pandas as pd
+                            df = pd.DataFrame(statement_data)
+                            st.dataframe(df, use_container_width=True)
+                                    
+                            # Display the calculated score
+                            st.markdown(f"**Calculated score:** {calculated_score:.3f} ({supported} supported statements out of {total} total)")
+                                    
+                            # Compare with RAGAS score
+                            st.markdown(f"**RAGAS faithfulness score:** {current_faithfulness_score:.3f}")
+                            st.markdown(f"**Our calculated score:** {calculated_score:.3f}")
+                            if abs(calculated_score - current_faithfulness_score) > 0.2:
+                                st.info("Note: There's a significant difference between our calculated score and the RAGAS score. This could be due to differences in statement extraction or evaluation methods.")
+                            else:
+                                st.success("Our calculated score is similar to the RAGAS score, which provides additional confidence in the evaluation.")
+                                
+                        # If not cached, generate new statement analysis
+                        else:
+                            # Generate example statements with verdicts for demonstration
+                            # In a real implementation, these would come from the RAGAS evaluation
+                            with st.spinner("Analyzing statements..."):
+                                statements_prompt = [
+                                    {"role": "system", "content": "You are an AI assistant that breaks down text into individual factual statements. For the given text, extract 5-8 key factual claims as a JSON list of strings. Each statement should be self-contained and represent a single factual claim. Return a JSON object with a 'statements' array. If you can't find any statements, include at least 3 general claims from the text."},
+                                    {"role": "user", "content": f"Extract factual statements from this text:\n\n{section1}"}
+                                ]
                                 
                             try:
                                 client = OpenAI()
@@ -2285,6 +2316,17 @@ def main():
                                         st.info("Note: There's a significant difference between our calculated score and the RAGAS score. This could be due to differences in statement extraction or evaluation methods.")
                                     else:
                                         st.success("Our calculated score is similar to the RAGAS score, which provides additional confidence in the evaluation.")
+                                    
+                                    # Cache the statement analysis results
+                                    if "validation_results" not in st.session_state:
+                                        st.session_state.validation_results = {}
+                                    
+                                    st.session_state.validation_results.update({
+                                        "statement_analysis": statement_data,
+                                        "calculated_score": calculated_score,
+                                        "supported": supported,
+                                        "total": total
+                                    })
                                 else:
                                     st.error("No statements were successfully evaluated. Please try again.")
                                 
