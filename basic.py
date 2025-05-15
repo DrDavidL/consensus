@@ -204,6 +204,8 @@ if "validated_section1" not in st.session_state:
     st.session_state.validated_section1 = ""
 if "validation_results" not in st.session_state:
     st.session_state.validation_results = None
+if "current_section1" not in st.session_state:
+    st.session_state.current_section1 = ""
 
 #########################################
 # Sidebar Configuration: UI Elements & Settings
@@ -1879,6 +1881,12 @@ def main():
                         #     # st.write(st.session_state.citations)
                         if updated_answer is not None:
                             st.session_state.full_initial_response = updated_answer_text
+                        
+                            # Extract and save Section 1 when initial response is generated
+                            pattern = r"^.*2\. Additional Insights from the Model's Knowledge.*$"
+                            split_content = re.split(pattern, updated_answer_text, maxsplit=1, flags=re.MULTILINE)
+                            if len(split_content) > 0:
+                                st.session_state.current_section1 = split_content[0].rstrip()
                     #     first_view = True
 
                     #     full_response += "\n\n**Sources**:\n"
@@ -2009,6 +2017,12 @@ def main():
                             + updated_answer.choices[0].message.content
                         )
                         st.session_state.full_initial_response = full_response
+                        
+                        # Extract and save Section 1 when initial response is generated
+                        pattern = r"^.*2\. Additional Insights from the Model's Knowledge.*$"
+                        split_content = re.split(pattern, full_response, maxsplit=1, flags=re.MULTILINE)
+                        if len(split_content) > 0:
+                            st.session_state.current_section1 = split_content[0].rstrip()
                         first_view = True
                 container1 = col1.container()
                 with container1:
@@ -2040,10 +2054,16 @@ def main():
                 if hallucination_check:
                     #### Ragas Scoring
 
-                    pattern = r"^.*2\. Additional Insights from the Model's Knowledge.*$"
-                    # Split at the first line MATCHING the plain text phrase (robust to markdown)
-                    split_content = re.split(pattern, st.session_state.full_initial_response, maxsplit=1, flags=re.MULTILINE)
-                    section1 = split_content[0].rstrip()
+                    # Use the cached section1 if available, otherwise extract it
+                    if st.session_state.current_section1:
+                        section1 = st.session_state.current_section1
+                    else:
+                        pattern = r"^.*2\. Additional Insights from the Model's Knowledge.*$"
+                        # Split at the first line MATCHING the plain text phrase (robust to markdown)
+                        split_content = re.split(pattern, st.session_state.full_initial_response, maxsplit=1, flags=re.MULTILINE)
+                        section1 = split_content[0].rstrip()
+                        # Cache the section1 for future use
+                        st.session_state.current_section1 = section1
                     
                     # Initialize variables to default values
                     current_rubric_score = 0
